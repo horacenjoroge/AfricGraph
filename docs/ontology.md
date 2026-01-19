@@ -21,19 +21,30 @@ Graph schema for the AfricGraph SME decision platform. The ontology defines node
 
 ## Relationships
 
-| Type          | From        | To          | Description                              |
-|---------------|-------------|-------------|------------------------------------------|
-| OWNS          | Person, Business | Asset, Business | Ownership of an asset or business    |
-| DIRECTOR_OF | Person      | Business    | Directorship                             |
-| BUYS_FROM     | Business    | Supplier    | Procurement relationship                 |
-| SELLS_TO      | Business    | Customer    | Sales relationship                       |
-| ISSUED        | Supplier, Business | Invoice  | Invoice issuer                           |
-| SETTLES       | Payment     | Invoice     | Payment settles invoice(s)               |
-| INVOLVES      | Transaction | Person, Business, BankAccount | Party to a transaction     |
-| HOLDS_ACCOUNT | Person, Business | BankAccount | Account holder                       |
-| GRANTED_TO    | Loan        | Person, Business | Loan borrower                        |
+| Type          | From        | To          | Properties       | Description                              |
+|---------------|-------------|-------------|------------------|------------------------------------------|
+| OWNS          | Person      | Business    | percentage, since| Ownership share and start date           |
+| OWNS          | Person, Business | Asset   | percentage, since| Ownership of an asset                    |
+| DIRECTOR_OF   | Person      | Business    | role, since      | Directorship role and start date         |
+| BUYS_FROM     | Business    | Supplier    | since            | Procurement start date                   |
+| SELLS_TO      | Business    | Customer    | -                | Sales relationship                       |
+| ISSUED        | Business    | Invoice     | -                | Invoice issuer                           |
+| ISSUED        | Supplier    | Invoice     | -                | Invoice issuer                           |
+| SETTLES       | Payment     | Invoice     | -                | Payment settles invoice(s)               |
+| INVOLVES      | Transaction | Business    | role             | Party role in transaction                |
+| INVOLVES      | Transaction | Person      | role             | Party role in transaction                |
+| INVOLVES      | Transaction | BankAccount | role             | Account role in transaction              |
+| HOLDS_ACCOUNT | Business    | BankAccount | -                | Account holder                           |
+| HOLDS_ACCOUNT | Person      | BankAccount | -                | Account holder                           |
+| GRANTED_TO    | Loan        | Business    | -                | Loan borrower                            |
+| GRANTED_TO    | Loan        | Person      | -                | Loan borrower                            |
 
 ## Schema Constraints
+
+- Uniqueness constraints on IDs
+- Required properties enforcement (per node label)
+- Relationship cardinality rules
+- Data type validation (node and relationship properties)
 
 ### Uniqueness
 
@@ -67,6 +78,19 @@ The `id` property is unique per label across the graph. Use it as the business o
 | INVOLVES      | one       | many     | One transaction involves many parties      |
 | HOLDS_ACCOUNT | many      | one      | One account has one holder (or joint)      |
 | GRANTED_TO    | one       | one/many | One loan to one borrower                   |
+
+### Data Type Validation
+
+Node and relationship properties have defined data types used for validation:
+
+- **string**: text
+- **int**: integer
+- **float**: decimal number (e.g. amount, percentage)
+- **date**: ISO date (YYYY-MM-DD)
+- **datetime**: ISO datetime (e.g. created_at)
+- **boolean**: true/false
+
+Node types (e.g. amount, currency, status) and relationship properties (e.g. percentage, since, role) are defined in `ontology.py` as `NODE_PROPERTY_TYPES` and `RELATIONSHIP_PROPERTIES`. Enforcement is applied in the Neo4j interface layer and API.
 
 ## Implementation
 

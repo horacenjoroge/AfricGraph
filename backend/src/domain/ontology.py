@@ -110,7 +110,48 @@ RELATIONSHIP_CARDINALITY: List[Tuple[str, str, str, str, str]] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Optional: from/to labels allowed per relationship type (for validation)
+# Relationship properties: (from_label, type, to_label) -> {prop: data_type}
+# Optional properties allowed on each relationship. Types: string, int, float, date, datetime, boolean.
+# ---------------------------------------------------------------------------
+
+RELATIONSHIP_PROPERTIES: Dict[Tuple[str, str, str], Dict[str, str]] = {
+    ("Person", "OWNS", "Business"): {"percentage": "float", "since": "date"},
+    ("Person", "OWNS", "Asset"): {"percentage": "float", "since": "date"},
+    ("Business", "OWNS", "Asset"): {"percentage": "float", "since": "date"},
+    ("Person", "DIRECTOR_OF", "Business"): {"role": "string", "since": "date"},
+    ("Business", "BUYS_FROM", "Supplier"): {"since": "date"},
+    ("Transaction", "INVOLVES", "Business"): {"role": "string"},
+    ("Transaction", "INVOLVES", "Person"): {"role": "string"},
+    ("Transaction", "INVOLVES", "BankAccount"): {"role": "string"},
+}
+
+# ---------------------------------------------------------------------------
+# Data types for validation. Allowed: string, int, float, date, datetime, boolean.
+# ---------------------------------------------------------------------------
+
+DATA_TYPES: Set[str] = {"string", "int", "float", "date", "datetime", "boolean"}
+
+# ---------------------------------------------------------------------------
+# Node property data types: label -> {property: data_type}
+# ---------------------------------------------------------------------------
+
+NODE_PROPERTY_TYPES: Dict[str, Dict[str, str]] = {
+    "Business": {"id": "string", "name": "string", "created_at": "datetime"},
+    "Person": {"id": "string", "name": "string", "created_at": "datetime"},
+    "Transaction": {"id": "string", "amount": "float", "currency": "string", "date": "date", "created_at": "datetime"},
+    "Invoice": {"id": "string", "number": "string", "amount": "float", "currency": "string", "issue_date": "date", "status": "string", "created_at": "datetime"},
+    "Payment": {"id": "string", "amount": "float", "currency": "string", "date": "date", "created_at": "datetime"},
+    "Supplier": {"id": "string", "name": "string", "created_at": "datetime"},
+    "Customer": {"id": "string", "name": "string", "created_at": "datetime"},
+    "Product": {"id": "string", "name": "string", "created_at": "datetime"},
+    "BankAccount": {"id": "string", "account_number": "string", "bank_name": "string", "currency": "string", "created_at": "datetime"},
+    "Loan": {"id": "string", "principal": "float", "currency": "string", "start_date": "date", "status": "string", "created_at": "datetime"},
+    "Asset": {"id": "string", "name": "string", "type": "string", "created_at": "datetime"},
+    "Location": {"id": "string", "address": "string", "country": "string", "created_at": "datetime"},
+}
+
+# ---------------------------------------------------------------------------
+# From/to labels allowed per relationship type (for validation)
 # ---------------------------------------------------------------------------
 
 RELATIONSHIP_FROM_LABELS: Dict[str, Set[str]] = {
@@ -158,3 +199,18 @@ def is_valid_relationship(from_label: str, rel_type: str, to_label: str) -> bool
     from_ok = from_label in RELATIONSHIP_FROM_LABELS.get(rel_type, set())
     to_ok = to_label in RELATIONSHIP_TO_LABELS.get(rel_type, set())
     return from_ok and to_ok
+
+
+def get_relationship_properties(from_label: str, rel_type: str, to_label: str) -> Dict[str, str]:
+    """Return allowed properties and their data types for a relationship. Empty dict if none defined."""
+    return dict(RELATIONSHIP_PROPERTIES.get((from_label, rel_type, to_label), {}))
+
+
+def get_node_property_type(label: str, prop: str) -> str:
+    """Return the data type for a node property, or empty string if unknown."""
+    return NODE_PROPERTY_TYPES.get(label, {}).get(prop, "")
+
+
+def is_valid_data_type(data_type: str) -> bool:
+    """Check if a data type is in the allowed set."""
+    return data_type in DATA_TYPES

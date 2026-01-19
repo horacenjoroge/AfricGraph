@@ -93,8 +93,8 @@ def find_path_query(max_depth: int) -> str:
     return (
         "MATCH (a), (b) WHERE id(a) = $start_id AND id(b) = $end_id "
         f"MATCH path = shortestPath((a)-[*1..{max_depth}]->(b)) "
-        "RETURN [n in nodes(path) | {{id: id(n), labels: labels(n), props: properties(n)}}] as nodes, "
-        "[r in relationships(path) | {{type: type(r), from: id(startNode(r)), to: id(endNode(r)), props: properties(r)}}] as rels"
+        "RETURN [n in nodes(path) | {id: id(n), labels: labels(n), props: properties(n)}] as nodes, "
+        "[r in relationships(path) | {type: type(r), from: id(startNode(r)), to: id(endNode(r)), props: properties(r)}] as rels"
     )
 
 

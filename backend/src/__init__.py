@@ -1,0 +1,1 @@
+"""AfricGraph backend package."""

@@ -1,9 +1,10 @@
-"""Neo4j database client with connection pooling, CRUD, transactions, and retry logic."""
-from typing import Dict, List, Optional, Any, Callable
-from neo4j import GraphDatabase, Driver
-from neo4j.exceptions import ServiceUnavailable, TransientError
-import time
+"""Neo4j database client with connection pooling, CRUD, transactions, retry, streaming, timeout, and deadlock handling."""
+from typing import Dict, List, Optional, Any, Callable, Iterator
 from contextlib import contextmanager
+import time
+
+from neo4j import GraphDatabase, Driver, Query
+from neo4j.exceptions import ServiceUnavailable, TransientError
 
 from src.config.settings import settings
 from src.infrastructure.logging import get_logger
@@ -11,6 +12,8 @@ import src.infrastructure.database.cypher_queries as cypher_queries
 from src.domain.ontology import NODE_LABELS, RELATIONSHIP_TYPES
 
 logger = get_logger(__name__)
+
+DEADLOCK_INDICATORS = ("deadlock", "lock", "lockexception", "acquirelock")
 
 
 class Neo4jClient:
@@ -55,25 +58,40 @@ class Neo4jClient:
         finally:
             session.close()
 
+    @staticmethod
+    def _is_deadlock(e: Exception) -> bool:
+        """Heuristic: TransientError with deadlock/lock-related message."""
+        msg = str(e).lower()
+        return any(x in msg for x in DEADLOCK_INDICATORS)
+
     def _execute_with_retry(self, func: Callable, *args, **kwargs):
-        """Execute function with exponential backoff retry logic."""
+        """Execute function with exponential backoff. Extra retries for deadlock-like TransientError."""
         last_exception = None
-        for attempt in range(self._max_retries):
+        max_retries = self._max_retries
+        attempt = 0
+        while attempt < max_retries:
             try:
                 return func(*args, **kwargs)
             except (ServiceUnavailable, TransientError) as e:
                 last_exception = e
-                if attempt < self._max_retries - 1:
+                is_deadlock = isinstance(e, TransientError) and self._is_deadlock(e)
+                if is_deadlock:
+                    logger.warning("Deadlock detected, retrying", attempt=attempt + 1, error=str(e))
+                    if attempt == 0:
+                        max_retries = max(max_retries, 5)
+                if attempt < max_retries - 1:
                     delay = self._retry_delay * (2 ** attempt)
-                    logger.warning(
-                        "Neo4j operation failed, retrying",
-                        attempt=attempt + 1,
-                        delay=delay,
-                        error=str(e),
-                    )
+                    if not is_deadlock:
+                        logger.warning(
+                            "Neo4j operation failed, retrying",
+                            attempt=attempt + 1,
+                            delay=delay,
+                            error=str(e),
+                        )
                     time.sleep(delay)
                 else:
                     logger.error("Neo4j operation failed after retries", error=str(e))
+                attempt += 1
             except Exception as e:
                 logger.error("Neo4j operation failed", error=str(e))
                 raise
@@ -108,20 +126,56 @@ class Neo4jClient:
         parameters: Optional[Dict] = None,
         skip: Optional[int] = None,
         limit: Optional[int] = None,
+        timeout: Optional[float] = None,
     ) -> List[Dict[str, Any]]:
-        """Execute a Cypher query. Optional skip/limit appended for pagination. Parameters are used as-is (parameterization prevents injection)."""
+        """Execute a Cypher query. Optional skip/limit for pagination, timeout in seconds (server-side)."""
         if parameters is None:
             parameters = {}
         if skip is not None and limit is not None:
             query = query.rstrip().rstrip(";") + " SKIP $skip LIMIT $limit"
             parameters = dict(parameters, skip=skip, limit=limit)
+        run_arg = Query(query, timeout=timeout) if timeout is not None else query
 
         def _execute():
             with self.get_session() as session:
-                result = session.run(query, parameters)
+                result = session.run(run_arg, parameters)
                 return [record.data() for record in result]
 
         return self._execute_with_retry(_execute)
+
+    @contextmanager
+    def stream_cypher(
+        self,
+        query: str,
+        parameters: Optional[Dict] = None,
+        skip: Optional[int] = None,
+        limit: Optional[int] = None,
+        timeout: Optional[float] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """
+        Stream query results one record at a time without loading all into memory.
+        Yields record.data() for each row. Session is held until the context exits;
+        consume or exit early to avoid holding the connection.
+        """
+        if parameters is None:
+            parameters = {}
+        if skip is not None and limit is not None:
+            query = query.rstrip().rstrip(";") + " SKIP $skip LIMIT $limit"
+            parameters = dict(parameters, skip=skip, limit=limit)
+        run_arg = Query(query, timeout=timeout) if timeout is not None else query
+        if not self.driver:
+            raise RuntimeError("Neo4j driver not initialized. Call connect() first.")
+
+        def _run():
+            session = self.driver.session()
+            result = session.run(run_arg, parameters)
+            return (session, result)
+
+        session, result = self._execute_with_retry(_run)
+        try:
+            yield (record.data() for record in result)
+        finally:
+            session.close()
 
     def create_node(self, label: str, properties: Dict[str, Any]) -> str:
         """Create a node and return its internal id as string. Label validated via ontology."""

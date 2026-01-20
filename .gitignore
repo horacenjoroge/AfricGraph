@@ -31,6 +31,7 @@ ENV/
 .env.*.local
 
 # IDE
+.cursor/
 .vscode/
 .idea/
 *.swp
@@ -39,7 +40,7 @@ ENV/
 .DS_Store
 
 # Project plan (not committed)
-PROJECT_PLAN.md
+
 
 # Logs
 *.log

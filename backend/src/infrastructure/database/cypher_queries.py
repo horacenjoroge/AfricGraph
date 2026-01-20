@@ -129,3 +129,27 @@ def batch_create_relationships_query() -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# Upsert (MERGE) for idempotent ingestion
+# ---------------------------------------------------------------------------
+
+
+def merge_node_query(label: str) -> str:
+    """MERGE (n:Label {id: $id}) ON CREATE SET n = $props ON MATCH SET n = $props RETURN id(n) as node_id.
+    props must include id. Label must be in NODE_LABELS."""
+    _check_label(label)
+    return f"MERGE (n:{label} {{id: $id}}) ON CREATE SET n = $props ON MATCH SET n = $props RETURN id(n) as node_id"
+
+
+def merge_relationship_by_business_id_query(from_label: str, to_label: str, rel_type: str) -> str:
+    """MATCH (a:FromLabel {id: $from_id}), (b:ToLabel {id: $to_id}) MERGE (a)-[r:RelType]->(b) SET r += $props.
+    Uses business id (string), not internal neo4j id."""
+    _check_label(from_label)
+    _check_label(to_label)
+    _check_rel_type(rel_type)
+    return (
+        f"MATCH (a:{from_label} {{id: $from_id}}), (b:{to_label} {{id: $to_id}}) "
+        f"MERGE (a)-[r:{rel_type}]->(b) SET r += $props"
+    )
+
+

@@ -269,6 +269,42 @@ class Neo4jClient:
 
         return self._execute_with_retry(_execute)
 
+    def merge_node(self, label: str, id_val: str, props: Dict[str, Any]) -> str:
+        """Upsert node by (label, id). ON CREATE and ON MATCH both set props. Returns internal id. Idempotent."""
+        if "id" not in props:
+            props = dict(props, id=id_val)
+        query = cypher_queries.merge_node_query(label)
+
+        def _execute():
+            with self.get_session() as session:
+                result = session.run(query, {"id": id_val, "props": props})
+                record = result.single()
+                return str(record["node_id"])
+
+        node_id = self._execute_with_retry(_execute)
+        logger.debug("Node merged", label=label, id=id_val)
+        return node_id
+
+    def merge_relationship_by_business_id(
+        self,
+        from_label: str,
+        from_id: str,
+        to_label: str,
+        to_id: str,
+        rel_type: str,
+        properties: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Upsert relationship (a:FromLabel {id: from_id})-[r:RelType]->(b:ToLabel {id: to_id}). Idempotent."""
+        props = properties or {}
+        query = cypher_queries.merge_relationship_by_business_id_query(from_label, to_label, rel_type)
+
+        def _execute():
+            with self.get_session() as session:
+                session.run(query, {"from_id": from_id, "to_id": to_id, "props": props})
+
+        self._execute_with_retry(_execute)
+        logger.debug("Relationship merged", from_label=from_label, to_label=to_label, rel_type=rel_type)
+
     def batch_create(
         self,
         nodes: Optional[List[Dict[str, Any]]] = None,

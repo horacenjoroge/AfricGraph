@@ -76,6 +76,13 @@ class Settings(BaseSettings):
     # Normalization
     normalization_target_currency: str = "USD"
     authoritative_sources_order: List[str] = []  # e.g. ["xero", "quickbooks", "odoo"] for merge
+    # Ingestion / Celery
+    celery_broker_url: str = ""  # default from rabbitmq if empty
+    default_business_id: str = "default"  # for Business-ISSUED-Invoice when no business in source
+    ingestion_mobile_money_path: str = ""  # for scheduled run; empty = disabled
+    ingestion_mobile_money_provider: str = "mpesa"
+    ingestion_accounting_connector: str = ""  # xero|quickbooks|odoo; empty = disabled
+    ingestion_accounting_tenant_id: str = ""
 
     class Config:
         env_file = ".env"

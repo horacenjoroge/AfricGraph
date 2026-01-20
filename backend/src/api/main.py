@@ -10,6 +10,8 @@ from src.infrastructure.database.postgres_client import postgres_client
 from src.infrastructure.cache.redis_client import redis_client
 from src.infrastructure.queue.rabbitmq_client import rabbitmq_client
 from src.infrastructure.search.elasticsearch_client import elasticsearch_client
+from src.infrastructure.audit import audit_logger
+from src.infrastructure.audit.middleware import AuditMiddleware
 
 # Configure logging
 configure_logging(settings.log_level)
@@ -27,6 +29,7 @@ async def lifespan(app: FastAPI):
         redis_client.connect()
         rabbitmq_client.connect()
         elasticsearch_client.connect()
+        audit_logger.ensure_audit_table()
         logger.info("All services connected successfully")
     except Exception as e:
         logger.error("Failed to initialize services", error=str(e))
@@ -60,6 +63,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(AuditMiddleware)
 
 
 @app.get("/")

@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     accounting_request_timeout: int = 30
     accounting_retry_max: int = 3
     accounting_rate_limit_delay: float = 1.0
+    # Normalization
+    normalization_target_currency: str = "USD"
+    authoritative_sources_order: List[str] = []  # e.g. ["xero", "quickbooks", "odoo"] for merge
 
     class Config:
         env_file = ".env"

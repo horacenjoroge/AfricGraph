@@ -2,7 +2,7 @@
 import json
 import hashlib
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from sqlalchemy import text
 
@@ -252,6 +252,100 @@ class AuditLogger:
             outcome="success",
         )
         return self._insert(ev)
+
+    def query(
+        self,
+        event_type: Optional[str] = None,
+        action: Optional[str] = None,
+        actor_id: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        from_ts: Optional[datetime] = None,
+        to_ts: Optional[datetime] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> List[dict]:
+        """Query audit events with filters. Returns list of row dicts."""
+        conditions = ["1=1"]
+        params = {"limit": limit, "offset": offset}
+        if event_type:
+            conditions.append("event_type = :event_type")
+            params["event_type"] = event_type
+        if action:
+            conditions.append("action = :action")
+            params["action"] = action
+        if actor_id:
+            conditions.append("actor_id = :actor_id")
+            params["actor_id"] = actor_id
+        if resource_type:
+            conditions.append("resource_type = :resource_type")
+            params["resource_type"] = resource_type
+        if resource_id:
+            conditions.append("resource_id = :resource_id")
+            params["resource_id"] = resource_id
+        if from_ts:
+            conditions.append("created_at >= :from_ts")
+            params["from_ts"] = from_ts
+        if to_ts:
+            conditions.append("created_at <= :to_ts")
+            params["to_ts"] = to_ts
+
+        with self._pg.get_session() as s:
+            r = s.execute(
+                text(f"""
+                SELECT id, created_at, event_type, action, actor_id, actor_type,
+                       resource_type, resource_id, outcome, reason,
+                       before_snapshot, after_snapshot, extra, ip_address, user_agent, event_hash
+                FROM {AUDIT_TABLE}
+                WHERE {" AND ".join(conditions)}
+                ORDER BY created_at DESC
+                LIMIT :limit OFFSET :offset
+                """),
+                params,
+            )
+            rows = r.fetchall()
+        keys = ["id", "created_at", "event_type", "action", "actor_id", "actor_type",
+                "resource_type", "resource_id", "outcome", "reason",
+                "before_snapshot", "after_snapshot", "extra", "ip_address", "user_agent", "event_hash"]
+        return [dict(zip(keys, row)) for row in rows]
+
+    def compliance_report(
+        self,
+        from_ts: datetime,
+        to_ts: datetime,
+        include_events: bool = True,
+        event_limit: int = 1000,
+    ) -> dict:
+        """Summary and optional event list for a date range. For compliance exports."""
+        params = {"from_ts": from_ts, "to_ts": to_ts, "event_limit": event_limit}
+        with self._pg.get_session() as s:
+            r = s.execute(
+                text(f"""
+                SELECT event_type, action, count(*) as cnt
+                FROM {AUDIT_TABLE}
+                WHERE created_at >= :from_ts AND created_at <= :to_ts
+                GROUP BY event_type, action
+                ORDER BY event_type, action
+                """),
+                params,
+            )
+            by_type_action = [{"event_type": row[0], "action": row[1], "count": row[2]} for row in r.fetchall()]
+
+            r2 = s.execute(
+                text(f"SELECT count(*) FROM {AUDIT_TABLE} WHERE created_at >= :from_ts AND created_at <= :to_ts"),
+                params,
+            )
+            total = r2.fetchone()[0]
+
+        report = {
+            "from_ts": from_ts.isoformat(),
+            "to_ts": to_ts.isoformat(),
+            "total_events": total,
+            "by_event_type_and_action": by_type_action,
+        }
+        if include_events:
+            report["events"] = self.query(from_ts=from_ts, to_ts=to_ts, limit=event_limit, offset=0)
+        return report
 
 
 audit_logger = AuditLogger()

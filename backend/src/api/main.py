@@ -12,8 +12,9 @@ from src.infrastructure.queue.rabbitmq_client import rabbitmq_client
 from src.infrastructure.search.elasticsearch_client import elasticsearch_client
 from src.infrastructure.audit import audit_logger
 from src.infrastructure.audit.middleware import AuditMiddleware
-from src.api.routes import auth
+from src.api.routes import auth, ingestion
 from src.auth.service import ensure_users_table
+from src.ingestion.pipeline.job_store import ensure_ingestion_jobs_table
 
 # Configure logging
 configure_logging(settings.log_level)
@@ -33,6 +34,7 @@ async def lifespan(app: FastAPI):
         elasticsearch_client.connect()
         audit_logger.ensure_audit_table()
         ensure_users_table()
+        ensure_ingestion_jobs_table()
         logger.info("All services connected successfully")
     except Exception as e:
         logger.error("Failed to initialize services", error=str(e))
@@ -69,6 +71,7 @@ app.add_middleware(
 app.add_middleware(AuditMiddleware)
 
 app.include_router(auth.router)
+app.include_router(ingestion.router)
 
 
 @app.get("/")

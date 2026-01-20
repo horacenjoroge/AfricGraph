@@ -55,12 +55,25 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_use_tls: bool = True
     
-    # OAuth Configuration
+    # Xero
     xero_client_id: str = ""
     xero_client_secret: str = ""
+    xero_redirect_uri: str = "http://localhost:8000/callback/xero"
+    # QuickBooks
     quickbooks_client_id: str = ""
     quickbooks_client_secret: str = ""
-    
+    quickbooks_redirect_uri: str = "http://localhost:8000/callback/quickbooks"
+    quickbooks_environment: str = "sandbox"  # sandbox | production
+    # Odoo
+    odoo_url: str = ""
+    odoo_db: str = ""
+    odoo_username: str = ""
+    odoo_password: str = ""
+    # Accounting connector defaults
+    accounting_request_timeout: int = 30
+    accounting_retry_max: int = 3
+    accounting_rate_limit_delay: float = 1.0
+
     class Config:
         env_file = ".env"
         case_sensitive = False

@@ -9,7 +9,7 @@ from sqlalchemy import text
 from src.infrastructure.database.postgres_client import postgres_client
 from src.infrastructure.logging import get_logger
 
-from .models import AuditEvent
+from .models import AuditEvent, AuditEventType, AuditAction
 
 logger = get_logger(__name__)
 
@@ -118,6 +118,140 @@ class AuditLogger:
             )
             (id_,) = r.fetchone()
             return id_
+
+    def log_access(
+        self,
+        action: str,
+        actor_id: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        reason: Optional[str] = None,
+        extra: Optional[dict] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> int:
+        """Log access: view, search, export."""
+        ev = AuditEvent(
+            event_type=AuditEventType.ACCESS,
+            action=action,
+            actor_id=actor_id,
+            actor_type="user",
+            resource_type=resource_type,
+            resource_id=resource_id,
+            reason=reason,
+            extra=extra,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            outcome="success",
+        )
+        return self._insert(ev)
+
+    def log_modification(
+        self,
+        action: str,
+        resource_type: str,
+        resource_id: str,
+        actor_id: Optional[str] = None,
+        before_snapshot: Optional[dict] = None,
+        after_snapshot: Optional[dict] = None,
+        reason: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> int:
+        """Log create, update, delete with optional before/after."""
+        ev = AuditEvent(
+            event_type=AuditEventType.MODIFICATION,
+            action=action,
+            actor_id=actor_id,
+            actor_type="user",
+            resource_type=resource_type,
+            resource_id=resource_id,
+            before_snapshot=before_snapshot,
+            after_snapshot=after_snapshot,
+            reason=reason,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            outcome="success",
+        )
+        return self._insert(ev)
+
+    def log_permission(
+        self,
+        granted: bool,
+        actor_id: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        reason: Optional[str] = None,
+        extra: Optional[dict] = None,
+        ip_address: Optional[str] = None,
+    ) -> int:
+        """Log permission granted or denied."""
+        ev = AuditEvent(
+            event_type=AuditEventType.PERMISSION,
+            action=AuditAction.GRANTED.value if granted else AuditAction.DENIED.value,
+            actor_id=actor_id,
+            actor_type="user",
+            resource_type=resource_type,
+            resource_id=resource_id,
+            outcome="granted" if granted else "denied",
+            reason=reason,
+            extra=extra,
+            ip_address=ip_address,
+        )
+        return self._insert(ev)
+
+    def log_decision(
+        self,
+        action: str,
+        actor_id: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        inputs: Optional[dict] = None,
+        outputs: Optional[dict] = None,
+        reasoning: Optional[str] = None,
+        extra: Optional[dict] = None,
+    ) -> int:
+        """Log risk score, fraud alert, or other decisions. inputs/outputs/reasoning in extra."""
+        ex = dict(extra or {})
+        if inputs is not None:
+            ex["inputs"] = inputs
+        if outputs is not None:
+            ex["outputs"] = outputs
+        if reasoning is not None:
+            ex["reasoning"] = reasoning
+        ev = AuditEvent(
+            event_type=AuditEventType.DECISION,
+            action=action,
+            actor_id=actor_id,
+            actor_type="system",
+            resource_type=resource_type,
+            resource_id=resource_id,
+            reason=reasoning,
+            extra=ex or None,
+            outcome="success",
+        )
+        return self._insert(ev)
+
+    def log_system(
+        self,
+        action: str,
+        actor_id: Optional[str] = None,
+        reason: Optional[str] = None,
+        extra: Optional[dict] = None,
+        ip_address: Optional[str] = None,
+    ) -> int:
+        """Log login, logout, config change."""
+        ev = AuditEvent(
+            event_type=AuditEventType.SYSTEM,
+            action=action,
+            actor_id=actor_id,
+            actor_type="user",
+            reason=reason,
+            extra=extra,
+            ip_address=ip_address,
+            outcome="success",
+        )
+        return self._insert(ev)
 
 
 audit_logger = AuditLogger()

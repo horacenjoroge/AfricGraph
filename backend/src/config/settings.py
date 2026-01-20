@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
+    jwt_refresh_expiration_days: int = 7
     
     # API Configuration
     api_host: str = "0.0.0.0"

@@ -1,5 +1,5 @@
 """Normalizer for mobile money (NormalizedTransaction -> CanonicalTransaction)."""
-from typing import List
+from typing import List, Optional
 
 from ..mobile_money.models import NormalizedTransaction
 from ..utils.phone import normalize_phone

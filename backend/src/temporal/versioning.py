@@ -103,7 +103,7 @@ class TemporalVersioning:
         query = """
         INSERT INTO temporal_nodes 
         (node_id, version, valid_from, valid_to, labels, properties, created_at, created_by)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES (%(node_id)s, %(version)s, %(valid_from)s, %(valid_to)s, %(labels)s, %(properties)s, %(created_at)s, %(created_by)s)
         """
         params = {
             "node_id": node_id,
@@ -180,7 +180,7 @@ class TemporalVersioning:
         query = """
         INSERT INTO temporal_relationships 
         (relationship_id, version, valid_from, valid_to, type, from_node_id, to_node_id, properties, created_at, created_by)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES (%(relationship_id)s, %(version)s, %(valid_from)s, %(valid_to)s, %(type)s, %(from_node_id)s, %(to_node_id)s, %(properties)s, %(created_at)s, %(created_by)s)
         """
         params = {
             "relationship_id": relationship_id,
@@ -222,22 +222,22 @@ class TemporalVersioning:
 
     def _get_current_node_version(self, node_id: str) -> Optional[int]:
         """Get current version number for a node."""
-        query = "SELECT MAX(version) as max_version FROM temporal_nodes WHERE node_id = $1"
+        query = "SELECT MAX(version) as max_version FROM temporal_nodes WHERE node_id = %(node_id)s"
         result = postgres_client.fetch_one(query, {"node_id": node_id})
-        return result["max_version"] if result and result["max_version"] else None
+        return result["max_version"] if result and result.get("max_version") else None
 
     def _get_current_relationship_version(self, relationship_id: str) -> Optional[int]:
         """Get current version number for a relationship."""
-        query = "SELECT MAX(version) as max_version FROM temporal_relationships WHERE relationship_id = $1"
+        query = "SELECT MAX(version) as max_version FROM temporal_relationships WHERE relationship_id = %(relationship_id)s"
         result = postgres_client.fetch_one(query, {"relationship_id": relationship_id})
-        return result["max_version"] if result and result["max_version"] else None
+        return result["max_version"] if result and result.get("max_version") else None
 
     def _close_node_version(self, node_id: str, version: int, timestamp: datetime):
         """Close a node version by setting valid_to."""
         query = """
         UPDATE temporal_nodes 
-        SET valid_to = $1 
-        WHERE node_id = $2 AND version = $3
+        SET valid_to = %(timestamp)s 
+        WHERE node_id = %(node_id)s AND version = %(version)s
         """
         postgres_client.execute(query, {"timestamp": timestamp, "node_id": node_id, "version": version})
 
@@ -245,20 +245,20 @@ class TemporalVersioning:
         """Close a relationship version by setting valid_to."""
         query = """
         UPDATE temporal_relationships 
-        SET valid_to = $1 
-        WHERE relationship_id = $2 AND version = $3
+        SET valid_to = %(timestamp)s 
+        WHERE relationship_id = %(relationship_id)s AND version = %(version)s
         """
         postgres_client.execute(query, {"timestamp": timestamp, "relationship_id": relationship_id, "version": version})
 
     def _get_node_properties(self, node_id: str, version: int) -> Optional[Dict[str, Any]]:
         """Get node properties for a specific version."""
-        query = "SELECT properties FROM temporal_nodes WHERE node_id = $1 AND version = $2"
+        query = "SELECT properties FROM temporal_nodes WHERE node_id = %(node_id)s AND version = %(version)s"
         result = postgres_client.fetch_one(query, {"node_id": node_id, "version": version})
         return result["properties"] if result else None
 
     def _get_relationship_properties(self, relationship_id: str, version: int) -> Optional[Dict[str, Any]]:
         """Get relationship properties for a specific version."""
-        query = "SELECT properties FROM temporal_relationships WHERE relationship_id = $1 AND version = $2"
+        query = "SELECT properties FROM temporal_relationships WHERE relationship_id = %(relationship_id)s AND version = %(version)s"
         result = postgres_client.fetch_one(query, {"relationship_id": relationship_id, "version": version})
         return result["properties"] if result else None
 
@@ -277,7 +277,7 @@ class TemporalVersioning:
         query = """
         INSERT INTO change_history 
         (change_id, entity_id, entity_type, change_type, timestamp, version, old_properties, new_properties, changed_by)
-        VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8)
+        VALUES (%(change_id)s, %(entity_id)s, %(entity_type)s, %(change_type)s, NOW(), %(version)s, %(old_properties)s, %(new_properties)s, %(changed_by)s)
         """
         params = {
             "change_id": change_id,

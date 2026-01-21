@@ -15,9 +15,11 @@ from src.infrastructure.audit import audit_logger
 from src.infrastructure.audit.middleware import AuditMiddleware
 from fastapi.exceptions import RequestValidationError
 
-from src.api.routes import alerts, auth, deduplication, graph
+from src.api.routes import alerts, auth, deduplication, graph, metrics
 from src.api.routes.v1.router import v1_router
 from src.graphql.router import graphql_router
+from src.monitoring.middleware import MetricsMiddleware
+from src.monitoring.system import system_metrics_collector
 from src.api.utils.errors import (
     generic_exception_handler,
     http_exception_handler,
@@ -53,6 +55,10 @@ async def lifespan(app: FastAPI):
         ensure_merge_history_table()
         ensure_alerts_table()
         initialize_rules()
+        
+        # Start system metrics collection
+        system_metrics_collector.start()
+        
         logger.info("All services connected successfully")
     except Exception as e:
         logger.error("Failed to initialize services", error=str(e))
@@ -62,6 +68,10 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down AfricGraph application")
+    
+    # Stop system metrics collection
+    system_metrics_collector.stop()
+    
     neo4j_client.close()
     postgres_client.close()
     redis_client.close()
@@ -93,6 +103,9 @@ app.add_middleware(
 # Add rate limiting
 app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
 
+# Add metrics middleware (before other middleware to capture all requests)
+app.add_middleware(MetricsMiddleware)
+
 # Add security and audit middleware
 app.add_middleware(PermissionContextMiddleware)
 app.add_middleware(AuditMiddleware)
@@ -109,6 +122,9 @@ app.include_router(v1_router)
 
 # Include GraphQL router
 app.include_router(graphql_router, prefix="/graphql")
+
+# Include metrics endpoint (Prometheus)
+app.include_router(metrics.router)
 
 # Include legacy/unversioned routers (for backward compatibility)
 app.include_router(auth.router)

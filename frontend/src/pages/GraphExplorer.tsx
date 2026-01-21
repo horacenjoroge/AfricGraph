@@ -9,6 +9,7 @@ import {
   getNodeColorByType,
   getNodeSizeByImportance,
 } from '../utils/graphUtils'
+import { exportGraphAsImage, exportGraphAsJSON } from '../utils/exportGraph'
 
 interface Node {
   id: string
@@ -117,22 +118,24 @@ export default function GraphExplorerPage() {
     }
   }
 
-  const exportGraph = useCallback(() => {
-    if (!graphRef.current) return
-    
-    // Capture screenshot using canvas
-    const canvas = graphRef.current.getGraphCanvas()
-    if (canvas) {
-      const dataUrl = canvas.toDataURL('image/png')
-      const link = document.createElement('a')
-      link.download = `graph-export-${Date.now()}.png`
-      link.href = dataUrl
-      link.click()
-    } else {
-      // Fallback: use html2canvas if available
-      alert('Export functionality requires canvas access. Please ensure the graph is fully loaded.')
+  const graphContainerRef = useRef<HTMLDivElement>(null)
+
+  const exportGraph = useCallback(async () => {
+    try {
+      if (graphContainerRef.current) {
+        await exportGraphAsImage(graphContainerRef.current)
+      } else {
+        // Fallback: export as JSON
+        exportGraphAsJSON(displayNodes, displayLinks)
+        alert('Graph exported as JSON. Image export requires graph container reference.')
+      }
+    } catch (error) {
+      console.error('Export failed:', error)
+      // Fallback to JSON export
+      exportGraphAsJSON(displayNodes, displayLinks)
+      alert('Image export failed. Graph data exported as JSON instead.')
     }
-  }, [])
+  }, [displayNodes, displayLinks])
 
   const handleNodeClick = useCallback((node: any) => {
     setSelectedNode(node)
@@ -161,7 +164,7 @@ export default function GraphExplorerPage() {
         </div>
 
         {/* Graph Canvas */}
-        <div className="flex-1 relative">
+        <div ref={graphContainerRef} className="flex-1 relative">
           {loading ? (
             <div className="absolute inset-0 flex items-center justify-center text-gray-400">
               <div className="text-center">

@@ -8,14 +8,22 @@ from src.cache.integrations import cached_business
 from src.cache.service import make_cache_key, CacheService
 from src.cache.config import CacheKey, CacheTTL
 from src.cache.invalidation import invalidate_business_cache
+from src.search.sync import sync_business_to_elasticsearch
 
 logger = get_logger(__name__)
 
 
 def create_business(business: Business) -> str:
-    """Create a business node in Neo4j."""
+    """Create a business node in Neo4j and index in Elasticsearch."""
     props = business.to_node_properties()
     node_id = neo4j_client.merge_node("Business", business.id, props)
+    
+    # Index in Elasticsearch
+    try:
+        sync_business_to_elasticsearch(business.id)
+    except Exception as e:
+        logger.warning(f"Failed to index business in Elasticsearch: {e}")
+    
     logger.info("Business created", business_id=business.id, node_id=node_id)
     return node_id
 
@@ -45,6 +53,12 @@ def update_business(business_id: str, updates: dict) -> Optional[Business]:
     
     # Invalidate cache
     invalidate_business_cache(business_id)
+    
+    # Re-index in Elasticsearch
+    try:
+        sync_business_to_elasticsearch(business_id)
+    except Exception as e:
+        logger.warning(f"Failed to re-index business in Elasticsearch: {e}")
     
     logger.info("Business updated", business_id=business_id)
     return updated

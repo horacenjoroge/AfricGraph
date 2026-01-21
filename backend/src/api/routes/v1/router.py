@@ -10,9 +10,11 @@ v1_router = APIRouter(prefix="/api/v1")
 
 # Include all v1 endpoints
 v1_router.include_router(businesses.router)
+# Note: ingestion router has prefix="/ingestion", but task requires /ingest
+# We'll include it with override prefix
 v1_router.include_router(ingestion.router, prefix="/ingest")
-v1_router.include_router(risk.router, prefix="/risk")
-v1_router.include_router(fraud.router, prefix="/fraud")
-v1_router.include_router(workflows.router, prefix="/workflows")
+v1_router.include_router(risk.router)
+v1_router.include_router(fraud.router)
+v1_router.include_router(workflows.router)
 v1_router.include_router(audit.router)
 v1_router.include_router(relationships.router)

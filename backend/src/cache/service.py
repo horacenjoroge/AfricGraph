@@ -137,9 +137,9 @@ class CacheService:
     def get(key: str) -> Optional[Any]:
         """Get value from cache."""
         cache_type = key.split(":")[0] if ":" in key else "unknown"
-        with track_cache_operation(cache_type, "get", hit=None):
-            cached = redis_client.get(key)
-            hit = cached is not None
+        cached = redis_client.get(key)
+        hit = cached is not None
+        with track_cache_operation(cache_type, "get", hit=hit):
             if hit:
                 return deserialize_value(cached)
             return None

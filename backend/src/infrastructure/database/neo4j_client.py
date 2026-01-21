@@ -15,6 +15,7 @@ from src.security.query_rewriter import (
     rewrite_node_query_with_permissions,
     rewrite_traversal_with_permissions,
 )
+from src.monitoring.instrumentation import track_neo4j_query
 
 logger = get_logger(__name__)
 
@@ -161,12 +162,13 @@ class Neo4jClient:
             parameters = dict(parameters, skip=skip, limit=limit)
         run_arg = Query(query, timeout=timeout) if timeout is not None else query
 
-        def _execute():
-            with self.get_session() as session:
-                result = session.run(run_arg, parameters)
-                return [record.data() for record in result]
+        with track_neo4j_query("cypher"):
+            def _execute():
+                with self.get_session() as session:
+                    result = session.run(run_arg, parameters)
+                    return [record.data() for record in result]
 
-        return self._execute_with_retry(_execute)
+            return self._execute_with_retry(_execute)
 
     @contextmanager
     def stream_cypher(
@@ -280,19 +282,20 @@ class Neo4jClient:
             )
             query, params = rewritten.cypher, rewritten.params
 
-        def _execute():
-            with self.get_session() as session:
-                result = session.run(query, params)
-                record = result.single()
-                if record is None:
-                    return {"start_id": int(start_id), "nodes": [], "relationships": []}
-                return {
-                    "start_id": record["start_id"],
-                    "nodes": list(record["nodes"]) if record["nodes"] else [],
-                    "relationships": list(record["relationships"]) if record["relationships"] else [],
-                }
+        with track_neo4j_query("traversal"):
+            def _execute():
+                with self.get_session() as session:
+                    result = session.run(query, params)
+                    record = result.single()
+                    if record is None:
+                        return {"start_id": int(start_id), "nodes": [], "relationships": []}
+                    return {
+                        "start_id": record["start_id"],
+                        "nodes": list(record["nodes"]) if record["nodes"] else [],
+                        "relationships": list(record["relationships"]) if record["relationships"] else [],
+                    }
 
-        return self._execute_with_retry(_execute)
+            return self._execute_with_retry(_execute)
 
     def find_path(
         self,

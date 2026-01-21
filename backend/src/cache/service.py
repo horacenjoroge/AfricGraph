@@ -7,6 +7,7 @@ from functools import wraps
 from src.infrastructure.cache.redis_client import redis_client
 from src.cache.config import CacheKey, CacheTTL, get_ttl
 from src.infrastructure.logging import get_logger
+from src.monitoring.instrumentation import track_cache_operation
 
 logger = get_logger(__name__)
 
@@ -135,21 +136,28 @@ class CacheService:
     @staticmethod
     def get(key: str) -> Optional[Any]:
         """Get value from cache."""
-        cached = redis_client.get(key)
-        if cached is not None:
-            return deserialize_value(cached)
-        return None
+        cache_type = key.split(":")[0] if ":" in key else "unknown"
+        with track_cache_operation(cache_type, "get", hit=None):
+            cached = redis_client.get(key)
+            hit = cached is not None
+            if hit:
+                return deserialize_value(cached)
+            return None
 
     @staticmethod
     def set(key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """Set value in cache."""
-        serialized = serialize_value(value)
-        return redis_client.set(key, serialized, ttl=ttl)
+        cache_type = key.split(":")[0] if ":" in key else "unknown"
+        with track_cache_operation(cache_type, "set"):
+            serialized = serialize_value(value)
+            return redis_client.set(key, serialized, ttl=ttl)
 
     @staticmethod
     def delete(key: str) -> bool:
         """Delete key from cache."""
-        return redis_client.delete(key)
+        cache_type = key.split(":")[0] if ":" in key else "unknown"
+        with track_cache_operation(cache_type, "delete"):
+            return redis_client.delete(key)
 
     @staticmethod
     def delete_pattern(pattern: str) -> int:

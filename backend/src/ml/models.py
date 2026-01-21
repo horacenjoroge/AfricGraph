@@ -1,47 +1,29 @@
-"""ML model definitions and schemas."""
-from typing import List, Optional
+"""ML model definitions and interfaces."""
+from typing import Dict, List, Optional
+from datetime import datetime
 from pydantic import BaseModel
 
 
-class FeatureVector(BaseModel):
-    """Feature vector for credit scoring."""
+class ModelMetadata(BaseModel):
+    """Model version metadata."""
 
-    payment_history_score: float
-    cashflow_trend: float
-    risk_score: float
-    business_age_months: float
-    industry_risk: float
-    transaction_volume: float
-    avg_transaction_amount: float
-    supplier_concentration: float
-    late_payment_ratio: float
-    default_history: int
-
-
-class PredictionRequest(BaseModel):
-    """Request for credit score prediction."""
-
-    business_id: str
-    features: Optional[FeatureVector] = None  # If None, will be extracted
-
-
-class PredictionResponse(BaseModel):
-    """Response from credit score prediction."""
-
-    business_id: str
-    default_probability: float
-    credit_score: float
-    prediction: str  # "default" or "no_default"
-    confidence: float
-    model_version: str
-
-
-class ModelMetrics(BaseModel):
-    """Model evaluation metrics."""
-
+    version: str
+    created_at: datetime
+    algorithm: str  # 'random_forest', 'xgboost'
     accuracy: float
     precision: float
     recall: float
     f1_score: float
-    roc_auc: float
+    feature_importance: Dict[str, float]
+    training_samples: int
+
+
+class PredictionResult(BaseModel):
+    """Credit scoring prediction result."""
+
+    business_id: str
+    default_probability: float
+    risk_category: str  # 'low', 'medium', 'high'
     model_version: str
+    prediction_date: datetime
+    feature_contributions: Optional[Dict[str, float]] = None  # SHAP values

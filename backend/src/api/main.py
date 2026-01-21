@@ -33,6 +33,7 @@ from src.deduplication.merge_history import ensure_merge_history_table
 from src.ingestion.pipeline.job_store import ensure_ingestion_jobs_table
 from src.security.abac import PermissionContextMiddleware
 from src.tenancy.middleware import TenantMiddleware
+from src.tenancy.middleware import TenantMiddleware
 
 # Configure logging
 configure_logging(settings.log_level)
@@ -104,6 +105,9 @@ app.add_middleware(
 # Add rate limiting
 app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
 
+# Add tenant middleware (before other middleware to set context)
+app.add_middleware(TenantMiddleware)
+
 # Add metrics middleware (before other middleware to capture all requests)
 app.add_middleware(MetricsMiddleware)
 
@@ -134,6 +138,7 @@ app.include_router(alerts.router)
 app.include_router(graph.router)
 app.include_router(backup.router)
 app.include_router(temporal.router)
+app.include_router(tenancy.router)
 
 
 @app.get("/")

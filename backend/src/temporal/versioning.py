@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from uuid import uuid4
 
+from sqlalchemy import text
+
 from src.infrastructure.database.neo4j_client import neo4j_client
 from src.infrastructure.database.postgres_client import postgres_client
 from src.infrastructure.logging import get_logger
@@ -115,7 +117,8 @@ class TemporalVersioning:
             "created_at": timestamp,
             "created_by": created_by,
         }
-        postgres_client.execute(query, params)
+        with postgres_client.get_session() as session:
+            session.execute(text(query), params)
 
         # Log change
         self._log_change(
@@ -194,7 +197,8 @@ class TemporalVersioning:
             "created_at": timestamp,
             "created_by": created_by,
         }
-        postgres_client.execute(query, params)
+        with postgres_client.get_session() as session:
+            session.execute(text(query), params)
 
         # Log change
         self._log_change(
@@ -223,14 +227,18 @@ class TemporalVersioning:
     def _get_current_node_version(self, node_id: str) -> Optional[int]:
         """Get current version number for a node."""
         query = "SELECT MAX(version) as max_version FROM temporal_nodes WHERE node_id = %(node_id)s"
-        result = postgres_client.fetch_one(query, {"node_id": node_id})
-        return result["max_version"] if result and result.get("max_version") else None
+        with postgres_client.get_session() as session:
+            result = session.execute(text(query), {"node_id": node_id})
+            row = result.fetchone()
+            return row["max_version"] if row and row["max_version"] else None
 
     def _get_current_relationship_version(self, relationship_id: str) -> Optional[int]:
         """Get current version number for a relationship."""
         query = "SELECT MAX(version) as max_version FROM temporal_relationships WHERE relationship_id = %(relationship_id)s"
-        result = postgres_client.fetch_one(query, {"relationship_id": relationship_id})
-        return result["max_version"] if result and result.get("max_version") else None
+        with postgres_client.get_session() as session:
+            result = session.execute(text(query), {"relationship_id": relationship_id})
+            row = result.fetchone()
+            return row["max_version"] if row and row["max_version"] else None
 
     def _close_node_version(self, node_id: str, version: int, timestamp: datetime):
         """Close a node version by setting valid_to."""
@@ -239,7 +247,8 @@ class TemporalVersioning:
         SET valid_to = %(timestamp)s 
         WHERE node_id = %(node_id)s AND version = %(version)s
         """
-        postgres_client.execute(query, {"timestamp": timestamp, "node_id": node_id, "version": version})
+        with postgres_client.get_session() as session:
+            session.execute(text(query), {"timestamp": timestamp, "node_id": node_id, "version": version})
 
     def _close_relationship_version(self, relationship_id: str, version: int, timestamp: datetime):
         """Close a relationship version by setting valid_to."""
@@ -248,19 +257,24 @@ class TemporalVersioning:
         SET valid_to = %(timestamp)s 
         WHERE relationship_id = %(relationship_id)s AND version = %(version)s
         """
-        postgres_client.execute(query, {"timestamp": timestamp, "relationship_id": relationship_id, "version": version})
+        with postgres_client.get_session() as session:
+            session.execute(text(query), {"timestamp": timestamp, "relationship_id": relationship_id, "version": version})
 
     def _get_node_properties(self, node_id: str, version: int) -> Optional[Dict[str, Any]]:
         """Get node properties for a specific version."""
         query = "SELECT properties FROM temporal_nodes WHERE node_id = %(node_id)s AND version = %(version)s"
-        result = postgres_client.fetch_one(query, {"node_id": node_id, "version": version})
-        return result["properties"] if result else None
+        with postgres_client.get_session() as session:
+            result = session.execute(text(query), {"node_id": node_id, "version": version})
+            row = result.fetchone()
+            return row["properties"] if row else None
 
     def _get_relationship_properties(self, relationship_id: str, version: int) -> Optional[Dict[str, Any]]:
         """Get relationship properties for a specific version."""
         query = "SELECT properties FROM temporal_relationships WHERE relationship_id = %(relationship_id)s AND version = %(version)s"
-        result = postgres_client.fetch_one(query, {"relationship_id": relationship_id, "version": version})
-        return result["properties"] if result else None
+        with postgres_client.get_session() as session:
+            result = session.execute(text(query), {"relationship_id": relationship_id, "version": version})
+            row = result.fetchone()
+            return row["properties"] if row else None
 
     def _log_change(
         self,
@@ -289,4 +303,5 @@ class TemporalVersioning:
             "new_properties": new_properties,
             "changed_by": changed_by,
         }
-        postgres_client.execute(query, params)
+        with postgres_client.get_session() as session:
+            session.execute(text(query), params)

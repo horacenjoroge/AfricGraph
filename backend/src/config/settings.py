@@ -87,6 +87,12 @@ class Settings(BaseSettings):
     deduplication_auto_merge_confidence_threshold: float = 0.95
     deduplication_candidates_limit: int = 500
 
+    # ABAC
+    abac_allowed_ips: List[str] = []
+    abac_business_hours_start: int = 8
+    abac_business_hours_end: int = 18
+    abac_timezone: str = "UTC"
+
     class Config:
         env_file = ".env"
         case_sensitive = False

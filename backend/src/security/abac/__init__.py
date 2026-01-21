@@ -5,6 +5,7 @@ from .attributes import SubjectAttributes, ResourceAttributes, EnvironmentAttrib
 from .policies import Action
 from .filters import build_filter_conditions
 from .cache import PermissionCache
+from .middleware import PermissionContextMiddleware
 
 __all__ = [
     "AbacEngine",
@@ -15,5 +16,6 @@ __all__ = [
     "Action",
     "build_filter_conditions",
     "PermissionCache",
+    "PermissionContextMiddleware",
     "abac_engine",
 ]

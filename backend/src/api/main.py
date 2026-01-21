@@ -12,7 +12,7 @@ from src.infrastructure.queue.rabbitmq_client import rabbitmq_client
 from src.infrastructure.search.elasticsearch_client import elasticsearch_client
 from src.infrastructure.audit import audit_logger
 from src.infrastructure.audit.middleware import AuditMiddleware
-from src.api.routes import auth, deduplication, ingestion
+from src.api.routes import auth, deduplication, ingestion, risk
 from src.auth.service import ensure_users_table
 from src.deduplication.merge_history import ensure_merge_history_table
 from src.ingestion.pipeline.job_store import ensure_ingestion_jobs_table
@@ -77,6 +77,7 @@ app.add_middleware(AuditMiddleware)
 app.include_router(auth.router)
 app.include_router(ingestion.router)
 app.include_router(deduplication.router)
+app.include_router(risk.router)
 
 
 @app.get("/")

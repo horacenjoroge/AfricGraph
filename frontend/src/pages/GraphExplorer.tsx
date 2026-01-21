@@ -1,31 +1,60 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import ForceGraph3D from 'react-force-graph-3d'
 import axios from 'axios'
+import GraphControls, { GraphFilters } from '../components/graph/GraphControls'
+import NodeDetailsPanel from '../components/graph/NodeDetailsPanel'
+import {
+  calculateNodeDegrees,
+  filterGraph,
+  getNodeColorByType,
+  getNodeSizeByImportance,
+} from '../utils/graphUtils'
 
 interface Node {
   id: string
   name: string
   labels: string[]
   riskScore?: number
+  degree?: number
+  properties?: Record<string, any>
 }
 
 interface Link {
-  source: string
-  target: string
+  source: string | Node
+  target: string | Node
   type: string
 }
 
 export default function GraphExplorerPage() {
-  const [nodes, setNodes] = useState<Node[]>([])
-  const [links, setLinks] = useState<Link[]>([])
+  const [allNodes, setAllNodes] = useState<Node[]>([])
+  const [allLinks, setAllLinks] = useState<Link[]>([])
+  const [displayNodes, setDisplayNodes] = useState<Node[]>([])
+  const [displayLinks, setDisplayLinks] = useState<Link[]>([])
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [loading, setLoading] = useState(false)
+  const [filters, setFilters] = useState<GraphFilters>({
+    nodeTypes: [],
+    riskLevel: 'all',
+    minRiskScore: 0,
+    maxRiskScore: 100,
+    showLabels: true,
+  })
   const graphRef = useRef<any>()
 
   useEffect(() => {
-    // Load initial graph data
     loadGraphData()
   }, [])
+
+  useEffect(() => {
+    // Recalculate degrees when nodes/links change
+    const nodesWithDegrees = calculateNodeDegrees(allNodes, allLinks)
+    setAllNodes(nodesWithDegrees)
+
+    // Apply filters
+    const filtered = filterGraph(nodesWithDegrees, allLinks, filters)
+    setDisplayNodes(filtered.nodes)
+    setDisplayLinks(filtered.links)
+  }, [allNodes, allLinks, filters])
 
   const loadGraphData = async () => {
     setLoading(true)
@@ -37,13 +66,18 @@ export default function GraphExplorerPage() {
         { id: '1', name: 'Business A', labels: ['Business'], riskScore: 75 },
         { id: '2', name: 'Business B', labels: ['Business'], riskScore: 45 },
         { id: '3', name: 'Person X', labels: ['Person'] },
+        { id: '4', name: 'Business C', labels: ['Business'], riskScore: 85 },
+        { id: '5', name: 'Transaction T1', labels: ['Transaction'] },
       ]
       const mockLinks: Link[] = [
         { source: '1', target: '2', type: 'SUPPLIED_BY' },
         { source: '3', target: '1', type: 'OWNS' },
+        { source: '1', target: '4', type: 'CONNECTED_TO' },
+        { source: '1', target: '5', type: 'INVOLVES' },
+        { source: '2', target: '5', type: 'INVOLVES' },
       ]
-      setNodes(mockNodes)
-      setLinks(mockLinks)
+      setAllNodes(mockNodes)
+      setAllLinks(mockLinks)
     } catch (error) {
       console.error('Failed to load graph:', error)
     } finally {
@@ -51,113 +85,172 @@ export default function GraphExplorerPage() {
     }
   }
 
-  const getNodeColor = (node: Node) => {
-    if (node.riskScore !== undefined) {
-      if (node.riskScore >= 80) return '#EF4444' // Red - high risk
-      if (node.riskScore >= 60) return '#F59E0B' // Yellow - medium risk
-      return '#10B981' // Green - low risk
+  const loadSubgraph = async (nodeId: string, maxHops: number) => {
+    setLoading(true)
+    try {
+      const response = await axios.get(`/api/v1/graph/subgraph/${nodeId}`, {
+        params: { max_hops: maxHops, format: 'json' },
+      })
+      
+      const subgraph = response.data
+      const nodes: Node[] = subgraph.nodes.map((n: any) => ({
+        id: String(n.id),
+        name: n.properties?.name || n.id,
+        labels: n.labels || [],
+        properties: n.properties,
+      }))
+      
+      const links: Link[] = subgraph.relationships.map((r: any) => ({
+        source: r.from_id,
+        target: r.to_id,
+        type: r.type,
+      }))
+      
+      setAllNodes(nodes)
+      setAllLinks(links)
+    } catch (error) {
+      console.error('Failed to load subgraph:', error)
+      alert('Failed to load subgraph. Using mock data.')
+      loadGraphData()
+    } finally {
+      setLoading(false)
     }
-    return '#3B82F6' // Blue - default
   }
 
-  const getNodeSize = (node: Node) => {
-    if (node.riskScore !== undefined && node.riskScore >= 80) {
-      return 8 // Larger for high-risk nodes
+  const exportGraph = useCallback(() => {
+    if (!graphRef.current) return
+    
+    // Capture screenshot using canvas
+    const canvas = graphRef.current.getGraphCanvas()
+    if (canvas) {
+      const dataUrl = canvas.toDataURL('image/png')
+      const link = document.createElement('a')
+      link.download = `graph-export-${Date.now()}.png`
+      link.href = dataUrl
+      link.click()
+    } else {
+      // Fallback: use html2canvas if available
+      alert('Export functionality requires canvas access. Please ensure the graph is fully loaded.')
     }
-    return 5
-  }
+  }, [])
+
+  const handleNodeClick = useCallback((node: any) => {
+    setSelectedNode(node)
+  }, [])
+
+  const handleLoadNeighbors = useCallback((nodeId: string) => {
+    loadSubgraph(nodeId, 1)
+    setSelectedNode(null)
+  }, [])
 
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-screen flex flex-col bg-deep-space">
       <div className="p-6 border-b border-glass-border">
         <h1 className="text-3xl font-bold font-mono mb-2">Graph Explorer</h1>
-        <p className="text-gray-400">Interactive knowledge graph visualization</p>
+        <p className="text-gray-400">Interactive 3D knowledge graph visualization</p>
       </div>
 
-      <div className="flex-1 relative">
-        {loading ? (
-          <div className="absolute inset-0 flex items-center justify-center text-gray-400">
-            Loading graph...
-          </div>
-        ) : (
-          <ForceGraph3D
-            ref={graphRef}
-            graphData={{ nodes, links }}
-            nodeLabel={(node: any) => `${node.name}${node.riskScore ? ` (Risk: ${node.riskScore})` : ''}`}
-            nodeColor={(node: any) => getNodeColor(node)}
-            nodeVal={(node: any) => getNodeSize(node)}
-            linkColor={() => 'rgba(255, 255, 255, 0.3)'}
-            linkWidth={1}
-            linkDirectionalArrowLength={4}
-            linkDirectionalArrowRelPos={1}
-            onNodeClick={(node: any) => setSelectedNode(node)}
-            backgroundColor="#0A0F1E"
-            showNavInfo={false}
-            nodeThreeObject={(node: any) => {
-              const sprite = new (window as any).THREE.Sprite(
-                new (window as any).THREE.SpriteMaterial({
-                  color: getNodeColor(node),
+      <div className="flex-1 flex relative overflow-hidden">
+        {/* Controls Sidebar */}
+        <div className="w-80 border-r border-glass-border overflow-y-auto p-6">
+          <GraphControls
+            onFilterChange={setFilters}
+            onExport={exportGraph}
+            onLoadSubgraph={loadSubgraph}
+          />
+        </div>
+
+        {/* Graph Canvas */}
+        <div className="flex-1 relative">
+          {loading ? (
+            <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
+                <div>Loading graph...</div>
+              </div>
+            </div>
+          ) : (
+            <ForceGraph3D
+              ref={graphRef}
+              graphData={{ nodes: displayNodes, links: displayLinks }}
+              nodeLabel={(node: any) => {
+                const riskText = node.riskScore ? ` (Risk: ${node.riskScore})` : ''
+                const degreeText = node.degree ? ` [${node.degree} connections]` : ''
+                return `${node.name}${riskText}${degreeText}`
+              }}
+              nodeColor={(node: any) => getNodeColorByType(node)}
+              nodeVal={(node: any) => getNodeSizeByImportance(node)}
+              linkLabel={(link: any) => (filters.showLabels ? link.type : '')}
+              linkColor={() => 'rgba(255, 255, 255, 0.3)'}
+              linkWidth={1}
+              linkDirectionalArrowLength={4}
+              linkDirectionalArrowRelPos={1}
+              linkCurvature={0.1}
+              onNodeClick={handleNodeClick}
+              backgroundColor="#0A0F1E"
+              showNavInfo={true}
+              nodeThreeObject={(node: any) => {
+                const color = getNodeColorByType(node)
+                const size = getNodeSizeByImportance(node)
+                
+                // Create glowing sphere
+                const geometry = new (window as any).THREE.SphereGeometry(size / 10, 16, 16)
+                const material = new (window as any).THREE.MeshPhongMaterial({
+                  color,
                   transparent: true,
                   opacity: 0.9,
+                  emissive: color,
+                  emissiveIntensity: 0.3,
                 })
-              )
-              sprite.scale.set(getNodeSize(node) * 2, getNodeSize(node) * 2, 1)
-              
-              // Add glow effect for high-risk nodes
-              if (node.riskScore >= 80) {
-                const glow = new (window as any).THREE.Sprite(
-                  new (window as any).THREE.SpriteMaterial({
+                const sphere = new (window as any).THREE.Mesh(geometry, material)
+                
+                // Add glow effect for high-risk nodes
+                if (node.riskScore !== undefined && node.riskScore >= 80) {
+                  const glowGeometry = new (window as any).THREE.SphereGeometry(size / 8, 16, 16)
+                  const glowMaterial = new (window as any).THREE.MeshBasicMaterial({
                     color: '#EF4444',
                     transparent: true,
-                    opacity: 0.3,
+                    opacity: 0.2,
                   })
-                )
-                glow.scale.set(getNodeSize(node) * 4, getNodeSize(node) * 4, 1)
-                const group = new (window as any).THREE.Group()
-                group.add(glow)
-                group.add(sprite)
-                return group
-              }
-              
-              return sprite
-            }}
-          />
-        )}
+                  const glow = new (window as any).THREE.Mesh(glowGeometry, glowMaterial)
+                  
+                  // Animate pulse
+                  const animate = () => {
+                    const time = Date.now() * 0.001
+                    const scale = 1 + Math.sin(time * 2) * 0.2
+                    glow.scale.set(scale, scale, scale)
+                    requestAnimationFrame(animate)
+                  }
+                  animate()
+                  
+                  const group = new (window as any).THREE.Group()
+                  group.add(glow)
+                  group.add(sphere)
+                  return group
+                }
+                
+                return sphere
+              }}
+              linkThreeObject={(link: any) => {
+                // Create curved line for relationships
+                const geometry = new (window as any).THREE.BufferGeometry()
+                const material = new (window as any).THREE.LineBasicMaterial({
+                  color: 0xffffff,
+                  transparent: true,
+                  opacity: 0.3,
+                })
+                return new (window as any).THREE.Line(geometry, material)
+              }}
+            />
+          )}
 
-        {/* Node Info Panel */}
-        {selectedNode && (
-          <div className="absolute top-4 right-4 glass-panel-strong rounded-lg p-6 w-80">
-            <h3 className="text-xl font-bold mb-2">{selectedNode.name}</h3>
-            <div className="space-y-2 text-sm">
-              <div>
-                <span className="text-gray-400">ID:</span>{' '}
-                <span className="font-mono">{selectedNode.id}</span>
-              </div>
-              <div>
-                <span className="text-gray-400">Labels:</span>{' '}
-                {selectedNode.labels.join(', ')}
-              </div>
-              {selectedNode.riskScore !== undefined && (
-                <div>
-                  <span className="text-gray-400">Risk Score:</span>{' '}
-                  <span className={`font-mono ${
-                    selectedNode.riskScore >= 80 ? 'text-red-400' :
-                    selectedNode.riskScore >= 60 ? 'text-yellow-400' :
-                    'text-green-400'
-                  }`}>
-                    {selectedNode.riskScore}
-                  </span>
-                </div>
-              )}
-            </div>
-            <button
-              onClick={() => setSelectedNode(null)}
-              className="mt-4 px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        )}
+          {/* Node Details Panel */}
+          <NodeDetailsPanel
+            node={selectedNode}
+            onClose={() => setSelectedNode(null)}
+            onLoadNeighbors={handleLoadNeighbors}
+          />
+        </div>
       </div>
     </div>
   )

@@ -13,7 +13,7 @@ from src.infrastructure.queue.rabbitmq_client import rabbitmq_client
 from src.infrastructure.search.elasticsearch_client import elasticsearch_client
 from src.infrastructure.audit import audit_logger
 from src.infrastructure.audit.middleware import AuditMiddleware
-from src.api.routes import alerts, auth, deduplication, ingestion, risk, fraud, workflows
+from src.api.routes import alerts, auth, deduplication, graph, ingestion, risk, fraud, workflows
 from src.alerts.engine import initialize_rules
 from src.alerts.persistence import ensure_alerts_table
 from src.auth.service import ensure_users_table
@@ -86,6 +86,7 @@ app.include_router(risk.router)
 app.include_router(fraud.router)
 app.include_router(workflows.router)
 app.include_router(alerts.router)
+app.include_router(graph.router)
 
 
 @app.get("/")

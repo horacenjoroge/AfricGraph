@@ -15,7 +15,7 @@ from src.infrastructure.audit import audit_logger
 from src.infrastructure.audit.middleware import AuditMiddleware
 from fastapi.exceptions import RequestValidationError
 
-from src.api.routes import alerts, auth, deduplication, graph, metrics
+from src.api.routes import alerts, auth, backup, deduplication, graph, metrics
 from src.api.routes.v1.router import v1_router
 from src.graphql.router import graphql_router
 from src.monitoring.middleware import MetricsMiddleware
@@ -131,6 +131,7 @@ app.include_router(auth.router)
 app.include_router(deduplication.router)
 app.include_router(alerts.router)
 app.include_router(graph.router)
+app.include_router(backup.router)
 
 
 @app.get("/")

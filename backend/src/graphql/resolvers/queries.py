@@ -31,10 +31,10 @@ class Query:
         sector: Optional[str] = None,
         limit: int = 20,
         offset: int = 0,
-        info: strawberry.Info = None,
+        info: strawberry.Info = strawberry.UNSET,
     ) -> List[BusinessType]:
         """Search businesses."""
-        context: GraphQLContext = info.context if info else None
+        context: GraphQLContext = info.context if info != strawberry.UNSET else None
         # Check permission for search
         if context and not context.check_permission("read", "Business"):
             raise PermissionError("Not authorized to search businesses")

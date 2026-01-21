@@ -1,10 +1,12 @@
-"""Model versioning and metadata management."""
+"""Model versioning and persistence."""
+import os
 import json
-from pathlib import Path
-from datetime import datetime
-from typing import Dict, Optional
 import joblib
+from typing import Optional, Dict
+from datetime import datetime
+from pathlib import Path
 
+from src.ml.models import ModelMetadata
 from src.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -12,122 +14,111 @@ logger = get_logger(__name__)
 MODELS_DIR = Path("models")
 MODELS_DIR.mkdir(exist_ok=True)
 
-METADATA_FILE = MODELS_DIR / "model_metadata.json"
 
-
-class ModelVersion:
-    """Model version metadata."""
-
-    def __init__(
-        self,
-        version: str,
-        model_type: str,
-        metrics: Dict,
-        training_date: str,
-        feature_names: list,
-        hyperparameters: Dict,
-    ):
-        self.version = version
-        self.model_type = model_type
-        self.metrics = metrics
-        self.training_date = training_date
-        self.feature_names = feature_names
-        self.hyperparameters = hyperparameters
-
-    def to_dict(self) -> Dict:
-        """Convert to dictionary."""
-        return {
-            "version": self.version,
-            "model_type": self.model_type,
-            "metrics": self.metrics,
-            "training_date": self.training_date,
-            "feature_names": self.feature_names,
-            "hyperparameters": self.hyperparameters,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict) -> "ModelVersion":
-        """Create from dictionary."""
-        return cls(
-            version=data["version"],
-            model_type=data["model_type"],
-            metrics=data["metrics"],
-            training_date=data["training_date"],
-            feature_names=data["feature_names"],
-            hyperparameters=data["hyperparameters"],
-        )
-
-
-def save_model_version(
-    version: str,
-    model_type: str,
-    metrics: Dict,
+def save_model(
+    model,
+    algorithm: str,
+    metrics: Dict[str, float],
     feature_names: list,
-    hyperparameters: Dict,
-) -> None:
-    """Save model version metadata."""
-    metadata = load_all_metadata()
+    feature_importance: Dict[str, float],
+    training_samples: int,
+    version: Optional[str] = None,
+) -> str:
+    """
+    Save a trained model with metadata.
 
-    model_version = ModelVersion(
+    Returns the model version string.
+    """
+    if version is None:
+        version = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    model_dir = MODELS_DIR / version
+    model_dir.mkdir(exist_ok=True)
+
+    # Save model
+    model_path = model_dir / "model.pkl"
+    joblib.dump(model, model_path)
+
+    # Save metadata
+    metadata = ModelMetadata(
         version=version,
-        model_type=model_type,
-        metrics=metrics,
-        training_date=datetime.now().isoformat(),
-        feature_names=feature_names,
-        hyperparameters=hyperparameters,
+        created_at=datetime.now(),
+        algorithm=algorithm,
+        accuracy=metrics.get("accuracy", 0.0),
+        precision=metrics.get("precision", 0.0),
+        recall=metrics.get("recall", 0.0),
+        f1_score=metrics.get("f1_score", 0.0),
+        feature_importance=feature_importance,
+        training_samples=training_samples,
     )
 
-    metadata[version] = model_version.to_dict()
+    metadata_path = model_dir / "metadata.json"
+    with open(metadata_path, "w") as f:
+        json.dump(metadata.model_dump(), f, indent=2, default=str)
 
-    with open(METADATA_FILE, "w") as f:
-        json.dump(metadata, f, indent=2)
+    # Save feature names
+    features_path = model_dir / "features.json"
+    with open(features_path, "w") as f:
+        json.dump(feature_names, f, indent=2)
 
-    logger.info("Model version saved", version=version, model_type=model_type)
-
-
-def load_all_metadata() -> Dict:
-    """Load all model metadata."""
-    if METADATA_FILE.exists():
-        with open(METADATA_FILE, "r") as f:
-            return json.load(f)
-    return {}
+    logger.info(f"Model saved: {version}")
+    return version
 
 
-def get_latest_version(model_type: str = "xgboost") -> Optional[str]:
-    """Get latest model version."""
-    metadata = load_all_metadata()
-    
-    versions = [
-        (v, data["training_date"])
-        for v, data in metadata.items()
-        if data["model_type"] == model_type
-    ]
-    
+def load_model(version: str):
+    """Load a model by version."""
+    model_dir = MODELS_DIR / version
+    model_path = model_dir / "model.pkl"
+
+    if not model_path.exists():
+        raise FileNotFoundError(f"Model version {version} not found")
+
+    model = joblib.load(model_path)
+    return model
+
+
+def load_metadata(version: str) -> ModelMetadata:
+    """Load model metadata by version."""
+    model_dir = MODELS_DIR / version
+    metadata_path = model_dir / "metadata.json"
+
+    if not metadata_path.exists():
+        raise FileNotFoundError(f"Metadata for version {version} not found")
+
+    with open(metadata_path, "r") as f:
+        data = json.load(f)
+        return ModelMetadata(**data)
+
+
+def load_feature_names(version: str) -> list:
+    """Load feature names for a model version."""
+    model_dir = MODELS_DIR / version
+    features_path = model_dir / "features.json"
+
+    if not features_path.exists():
+        raise FileNotFoundError(f"Features for version {version} not found")
+
+    with open(features_path, "r") as f:
+        return json.load(f)
+
+
+def get_latest_version() -> Optional[str]:
+    """Get the latest model version."""
+    if not MODELS_DIR.exists():
+        return None
+
+    versions = [d.name for d in MODELS_DIR.iterdir() if d.is_dir()]
     if not versions:
         return None
-    
-    # Sort by training date (newest first)
-    versions.sort(key=lambda x: x[1], reverse=True)
-    return versions[0][0]
+
+    # Sort by version string (timestamp format)
+    versions.sort(reverse=True)
+    return versions[0]
 
 
-def get_model_version(version: str) -> Optional[ModelVersion]:
-    """Get specific model version metadata."""
-    metadata = load_all_metadata()
-    if version in metadata:
-        return ModelVersion.from_dict(metadata[version])
-    return None
+def list_versions() -> list[str]:
+    """List all available model versions."""
+    if not MODELS_DIR.exists():
+        return []
 
-
-def list_model_versions(model_type: Optional[str] = None) -> list[ModelVersion]:
-    """List all model versions, optionally filtered by type."""
-    metadata = load_all_metadata()
-    
-    versions = []
-    for version_data in metadata.values():
-        if model_type is None or version_data["model_type"] == model_type:
-            versions.append(ModelVersion.from_dict(version_data))
-    
-    # Sort by training date (newest first)
-    versions.sort(key=lambda x: x.training_date, reverse=True)
-    return versions
+    return sorted([d.name for d in MODELS_DIR.iterdir() if d.is_dir()], reverse=True)

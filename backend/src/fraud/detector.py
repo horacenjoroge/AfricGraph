@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Dict, List
 
 from src.infrastructure.logging import get_logger
+from src.monitoring.instrumentation import track_fraud_detection, record_fraud_alert
 
 from .alerts import create_alert_from_hits
 from .models import FraudPatternHit
@@ -20,26 +21,33 @@ logger = get_logger(__name__)
 
 def run_fraud_checks_for_business(business_id: str) -> Dict[str, object]:
     """Run all fraud pattern detectors, create an alert, and return details."""
-    all_hits: List[FraudPatternHit] = []
+    with track_fraud_detection():
+        all_hits: List[FraudPatternHit] = []
 
-    detectors = [
-        detect_circular_payments,
-        detect_shell_company_signals,
-        detect_duplicate_invoices,
-        detect_invoice_fraud_signals,
-        detect_structuring,
-        detect_round_amounts,
-        detect_unusual_patterns,
-    ]
+        detectors = [
+            detect_circular_payments,
+            detect_shell_company_signals,
+            detect_duplicate_invoices,
+            detect_invoice_fraud_signals,
+            detect_structuring,
+            detect_round_amounts,
+            detect_unusual_patterns,
+        ]
 
-    for fn in detectors:
-        try:
-            hits = fn(business_id)
-            all_hits.extend(hits)
-        except Exception as e:
-            logger.exception("fraud detector failed", pattern_fn=fn.__name__, business_id=business_id, error=str(e))
+        for fn in detectors:
+            try:
+                hits = fn(business_id)
+                all_hits.extend(hits)
+            except Exception as e:
+                logger.exception("fraud detector failed", pattern_fn=fn.__name__, business_id=business_id, error=str(e))
 
-    alert = create_alert_from_hits(business_id, all_hits)
+        alert = create_alert_from_hits(business_id, all_hits)
+        
+        # Record fraud alert metrics
+        if alert:
+            record_fraud_alert(alert.severity.value, "composite")
+            for hit in all_hits:
+                record_fraud_alert(alert.severity.value, hit.pattern)
     return {
         "business_id": business_id,
         "patterns": [

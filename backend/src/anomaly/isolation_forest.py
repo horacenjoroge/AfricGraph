@@ -1,5 +1,5 @@
 """Isolation Forest for transaction anomaly detection."""
-from typing import List, Dict
+from typing import List, Dict, Optional
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import IsolationForest

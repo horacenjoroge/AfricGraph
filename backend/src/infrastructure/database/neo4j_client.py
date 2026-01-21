@@ -10,6 +10,11 @@ from src.config.settings import settings
 from src.infrastructure.logging import get_logger
 import src.infrastructure.database.cypher_queries as cypher_queries
 from src.domain.ontology import NODE_LABELS, RELATIONSHIP_TYPES
+from src.security.abac import SubjectAttributes, Action
+from src.security.query_rewriter import (
+    rewrite_node_query_with_permissions,
+    rewrite_traversal_with_permissions,
+)
 
 logger = get_logger(__name__)
 
@@ -127,10 +132,30 @@ class Neo4jClient:
         skip: Optional[int] = None,
         limit: Optional[int] = None,
         timeout: Optional[float] = None,
+        *,
+        subject: Optional[SubjectAttributes] = None,
+        action: Action = Action.READ,
+        node_alias: str = "n",
     ) -> List[Dict[str, Any]]:
-        """Execute a Cypher query. Optional skip/limit for pagination, timeout in seconds (server-side)."""
+        """
+        Execute a Cypher query with optional permission-aware filtering.
+
+        If a SubjectAttributes is provided, node-level filters are injected using the
+        configured alias (defaults to 'n').
+        """
         if parameters is None:
             parameters = {}
+
+        if subject is not None:
+            rewritten = rewrite_node_query_with_permissions(
+                query,
+                parameters,
+                action=action,
+                subject=subject,
+                node_alias=node_alias,
+            )
+            query, parameters = rewritten.cypher, rewritten.params
+
         if skip is not None and limit is not None:
             query = query.rstrip().rstrip(";") + " SKIP $skip LIMIT $limit"
             parameters = dict(parameters, skip=skip, limit=limit)
@@ -232,10 +257,28 @@ class Neo4jClient:
         start_id: str,
         rel_types: Optional[List[str]] = None,
         max_depth: int = 3,
+        *,
+        subject: Optional[SubjectAttributes] = None,
+        action: Action = Action.READ,
     ) -> Dict[str, Any]:
-        """Traverse from start_id along rel_types (or all) up to max_depth. Returns {start_id, nodes, relationships}."""
+        """
+        Traverse from start_id along rel_types (or all) up to max_depth.
+        Returns {start_id, nodes, relationships}. If a subject is provided,
+        node and relationship visibility are filtered using ABAC rules.
+        """
         query = cypher_queries.traverse_query(rel_types, max_depth)
-        params = {"start_id": int(start_id)}
+        params: Dict[str, Any] = {"start_id": int(start_id)}
+
+        if subject is not None:
+            rewritten = rewrite_traversal_with_permissions(
+                query,
+                params,
+                action=action,
+                subject=subject,
+                node_alias="n",
+                rel_alias="r",
+            )
+            query, params = rewritten.cypher, rewritten.params
 
         def _execute():
             with self.get_session() as session:

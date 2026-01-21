@@ -1,0 +1,69 @@
+{
+  "dashboard": {
+    "title": "AfricGraph - Business Metrics",
+    "tags": ["africgraph", "business"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Risk Calculations Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(risk_calculations_total[5m])",
+            "legendFormat": "{{business_id}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Risk Calculation Duration",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(risk_calculation_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "High Risk Businesses",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "high_risk_businesses",
+            "legendFormat": "Count"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Fraud Alerts Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(fraud_alerts_total[5m])",
+            "legendFormat": "{{severity}} {{pattern_type}}"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Fraud Detection Duration",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(fraud_detection_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95"
+          }
+        ]
+      }
+    ],
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}

@@ -7,6 +7,7 @@ from src.risk.scoring.engine import compute_business_risk
 from src.risk.scoring.history import get_latest_risk_score
 from src.risk.cashflow.calculator import compute_cash_health
 from src.risk.cashflow.forecaster import forecast_cashflow
+from src.risk.supplier.analyzer import analyze_supplier_risk
 
 router = APIRouter(prefix="/risk", tags=["risk"])
 
@@ -80,5 +81,21 @@ def get_cashflow_health(business_id: str, horizon_months: int = 6) -> dict:
         ],
         "horizon_months": forecast.horizon_months,
     }
+
+
+@router.get("/suppliers/{business_id}")
+def get_supplier_risk(business_id: str) -> dict:
+    """
+    Return supplier risk analysis for a business.
+
+    Includes:
+      - concentration ratio / HHI / SPOF
+      - shared directors
+      - late payment patterns
+      - supplier health labels
+      - alternative supplier suggestions
+      - dependency graph for visualization
+    """
+    return analyze_supplier_risk(business_id)
 
 

@@ -13,7 +13,16 @@ from src.infrastructure.queue.rabbitmq_client import rabbitmq_client
 from src.infrastructure.search.elasticsearch_client import elasticsearch_client
 from src.infrastructure.audit import audit_logger
 from src.infrastructure.audit.middleware import AuditMiddleware
-from src.api.routes import alerts, auth, deduplication, graph, ingestion, risk, fraud, workflows
+from fastapi.exceptions import RequestValidationError
+
+from src.api.routes import alerts, auth, deduplication, graph
+from src.api.routes.v1.router import v1_router
+from src.api.utils.errors import (
+    generic_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+)
+from src.api.utils.rate_limit import RateLimitMiddleware
 from src.alerts.engine import initialize_rules
 from src.alerts.persistence import ensure_alerts_table
 from src.auth.service import ensure_users_table
@@ -60,12 +69,15 @@ async def lifespan(app: FastAPI):
     logger.info("All services disconnected")
 
 
-# Create FastAPI app
+# Create FastAPI app with OpenAPI configuration
 app = FastAPI(
     title="AfricGraph API",
     description="Ontology-Driven Decision Platform for SMEs",
-    version="0.1.0",
-    lifespan=lifespan
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 
 # Configure CORS
@@ -76,15 +88,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add rate limiting
+app.add_middleware(RateLimitMiddleware, requests_per_minute=60)
+
+# Add security and audit middleware
 app.add_middleware(PermissionContextMiddleware)
 app.add_middleware(AuditMiddleware)
 
+# Register error handlers
+from fastapi import HTTPException
+
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(Exception, generic_exception_handler)
+
+# Include v1 API router (comprehensive REST API)
+app.include_router(v1_router)
+
+# Include legacy/unversioned routers (for backward compatibility)
 app.include_router(auth.router)
-app.include_router(ingestion.router)
 app.include_router(deduplication.router)
-app.include_router(risk.router)
-app.include_router(fraud.router)
-app.include_router(workflows.router)
 app.include_router(alerts.router)
 app.include_router(graph.router)
 

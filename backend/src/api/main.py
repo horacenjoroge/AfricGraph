@@ -17,6 +17,7 @@ from fastapi.exceptions import RequestValidationError
 
 from src.api.routes import alerts, auth, deduplication, graph
 from src.api.routes.v1.router import v1_router
+from src.graphql.router import graphql_router
 from src.api.utils.errors import (
     generic_exception_handler,
     http_exception_handler,
@@ -105,6 +106,9 @@ app.add_exception_handler(Exception, generic_exception_handler)
 
 # Include v1 API router (comprehensive REST API)
 app.include_router(v1_router)
+
+# Include GraphQL router
+app.include_router(graphql_router, prefix="/graphql")
 
 # Include legacy/unversioned routers (for backward compatibility)
 app.include_router(auth.router)

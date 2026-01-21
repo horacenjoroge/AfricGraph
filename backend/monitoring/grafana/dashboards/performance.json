@@ -1,0 +1,91 @@
+{
+  "dashboard": {
+    "title": "AfricGraph - Performance Metrics",
+    "tags": ["africgraph", "performance"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Neo4j Query Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(neo4j_queries_total[5m])",
+            "legendFormat": "{{query_type}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Neo4j Query Duration (p95)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(neo4j_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{query_type}}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Cache Hit Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(cache_hits_total[5m]) / rate(cache_requests_total[5m])",
+            "legendFormat": "{{cache_type}}"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Cache Operations Duration",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(cache_operations_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{cache_type}} {{operation}}"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Ingestion Job Success Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(ingestion_jobs_total{status=\"success\"}[5m]) / rate(ingestion_jobs_total[5m])",
+            "legendFormat": "{{job_type}}"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Ingestion Job Duration",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(ingestion_job_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{job_type}}"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Search Query Duration",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(search_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{index}}"
+          }
+        ]
+      }
+    ],
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}

@@ -1,0 +1,110 @@
+groups:
+  - name: africgraph_alerts
+    interval: 30s
+    rules:
+      # High Error Rate
+      - alert: HighAPIErrorRate
+        expr: rate(api_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High API error rate detected"
+          description: "API error rate is {{ $value }} errors/sec (threshold: 10)"
+
+      # Slow Queries
+      - alert: SlowNeo4jQueries
+        expr: histogram_quantile(0.95, rate(neo4j_query_duration_seconds_bucket[5m])) > 2.0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow Neo4j queries detected"
+          description: "95th percentile Neo4j query time is {{ $value }}s (threshold: 2s)"
+
+      - alert: SlowAPIResponses
+        expr: histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m])) > 5.0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow API responses detected"
+          description: "95th percentile API response time is {{ $value }}s (threshold: 5s)"
+
+      # High Risk Businesses
+      - alert: HighRiskBusinesses
+        expr: high_risk_businesses > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of high-risk businesses"
+          description: "{{ $value }} businesses have high risk scores (threshold: 50)"
+
+      # Fraud Alerts
+      - alert: HighFraudAlertRate
+        expr: rate(fraud_alerts_total{severity="critical"}[5m]) > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High rate of critical fraud alerts"
+          description: "Critical fraud alert rate is {{ $value }} alerts/sec (threshold: 5)"
+
+      # System Failures
+      - alert: HighSystemCPU
+        expr: system_cpu_usage_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% (threshold: 80%)"
+
+      - alert: HighSystemMemory
+        expr: (system_memory_usage_bytes / (1024 * 1024 * 1024)) > 8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}GB (threshold: 8GB)"
+
+      - alert: HighSystemDisk
+        expr: (system_disk_usage_bytes / (1024 * 1024 * 1024)) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage is {{ $value }}GB (threshold: 50GB)"
+
+      # Cache Issues
+      - alert: LowCacheHitRate
+        expr: (rate(cache_hits_total[5m]) / rate(cache_requests_total[5m])) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} (threshold: 50%)"
+
+      # Ingestion Failures
+      - alert: HighIngestionFailureRate
+        expr: rate(ingestion_jobs_total{status="failure"}[5m]) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High ingestion job failure rate"
+          description: "Ingestion failure rate is {{ $value }} failures/sec (threshold: 2)"
+
+      # Service Health
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service is down"
+          description: "Service has been down for more than 1 minute"

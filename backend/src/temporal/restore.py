@@ -103,12 +103,12 @@ class RestoreManager:
                 if node.valid_to:
                     props["_temporal_valid_to"] = node.valid_to.isoformat()
 
-                # Use merge_node with proper signature
+                # Use merge_node with proper signature: (label, id_val, props)
                 label = node.labels[0] if node.labels else "Node"
                 neo4j_client.merge_node(
                     label=label,
-                    node_id=node.node_id,
-                    properties=props,
+                    id_val=node.node_id,
+                    props=props,
                 )
                 restored += 1
             except Exception as e:
@@ -126,12 +126,9 @@ class RestoreManager:
                 if rel.valid_to:
                     props["_temporal_valid_to"] = rel.valid_to.isoformat()
 
-                # Use create_relationship with proper signature
-                # Need to determine labels from node IDs - simplified for now
+                # Use create_relationship with proper signature: (from_id, to_id, rel_type, properties)
                 neo4j_client.create_relationship(
-                    from_label="Node",  # Simplified - would need to query actual labels
                     from_id=rel.from_node_id,
-                    to_label="Node",
                     to_id=rel.to_node_id,
                     rel_type=rel.type,
                     properties=props,

@@ -2,6 +2,8 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
+from sqlalchemy import text
+
 from src.infrastructure.database.postgres_client import postgres_client
 from src.infrastructure.database.neo4j_client import neo4j_client
 from src.infrastructure.logging import get_logger
@@ -79,7 +81,9 @@ class TemporalQueryEngine:
         """
         
         # Get latest version for each node
-        rows = postgres_client.fetch_all(query, params)
+        with postgres_client.get_session() as session:
+            result = session.execute(text(query), params)
+            rows = [dict(row) for row in result]
         
         # Group by node_id and take latest version
         nodes_by_id = {}
@@ -133,7 +137,9 @@ class TemporalQueryEngine:
         ORDER BY relationship_id, version DESC
         """
         
-        rows = postgres_client.fetch_all(query, params)
+        with postgres_client.get_session() as session:
+            result = session.execute(text(query), params)
+            rows = [dict(row) for row in result]
         
         # Group by relationship_id and take latest version
         rels_by_id = {}
@@ -195,7 +201,9 @@ class TemporalQueryEngine:
         ORDER BY version ASC
         """
         
-        rows = postgres_client.fetch_all(query, params)
+        with postgres_client.get_session() as session:
+            result = session.execute(text(query), params)
+            rows = [dict(row) for row in result]
         
         return [
             TemporalNode(
@@ -249,7 +257,9 @@ class TemporalQueryEngine:
         ORDER BY version ASC
         """
         
-        rows = postgres_client.fetch_all(query, params)
+        with postgres_client.get_session() as session:
+            result = session.execute(text(query), params)
+            rows = [dict(row) for row in result]
         
         return [
             TemporalRelationship(

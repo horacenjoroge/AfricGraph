@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     ingestion_mobile_money_provider: str = "mpesa"
     ingestion_accounting_connector: str = ""  # xero|quickbooks|odoo; empty = disabled
     ingestion_accounting_tenant_id: str = ""
+    # Deduplication
+    deduplication_auto_merge_confidence_threshold: float = 0.95
+    deduplication_candidates_limit: int = 500
 
     class Config:
         env_file = ".env"

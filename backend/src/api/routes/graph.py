@@ -4,6 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from src.graph.common_ownership import find_common_owners, find_ownership_path
 from src.graph.components import find_connected_components, get_component_for_node
 from src.graph.cycles import detect_cycles
 from src.graph.export import (
@@ -11,6 +12,8 @@ from src.graph.export import (
     export_subgraph_for_visualization,
 )
 from src.graph.metrics import compute_node_metrics, compute_pagerank_for_subgraph
+from src.graph.relationship_search import find_connections
+from src.graph.shared_directors import find_director_network_path, find_shared_directors
 from src.graph.traversal import extract_subgraph, find_all_paths, find_shortest_path
 
 router = APIRouter(prefix="/graph", tags=["graph"])
@@ -124,3 +127,71 @@ def get_path_visualization(start_id: str, end_id: str) -> dict:
     if not path:
         raise HTTPException(status_code=404, detail="No path found")
     return export_path_for_visualization(path)
+
+
+@router.get("/relationships/connect/{entity_a_id}/{entity_b_id}")
+def get_connections(
+    entity_a_id: str,
+    entity_b_id: str,
+    max_depth: int = Query(5, ge=1, le=10),
+    include_all_paths: bool = Query(False),
+    format: str = Query("json", regex="^(json|visualization)$"),
+) -> dict:
+    """
+    Find how two entities are connected.
+
+    Returns all connection paths with strength scores.
+    """
+    connections = find_connections(entity_a_id, entity_b_id, max_depth, include_all_paths)
+
+    if format == "visualization":
+        # Return visualization-ready format
+        result = {
+            "entity_a_id": entity_a_id,
+            "entity_b_id": entity_b_id,
+            "connections": [],
+        }
+        for conn in connections:
+            vis_data = export_path_for_visualization(conn.path)
+            vis_data["strength_score"] = conn.strength_score
+            vis_data["connection_type"] = conn.connection_type
+            vis_data["details"] = conn.details
+            result["connections"].append(vis_data)
+        return result
+    else:
+        return {
+            "entity_a_id": entity_a_id,
+            "entity_b_id": entity_b_id,
+            "connections": [c.to_dict() for c in connections],
+            "count": len(connections),
+        }
+
+
+@router.get("/relationships/common-ownership/{entity_a_id}/{entity_b_id}")
+def get_common_ownership(entity_a_id: str, entity_b_id: str) -> dict:
+    """Find common owners between two entities."""
+    return find_common_owners(entity_a_id, entity_b_id)
+
+
+@router.get("/relationships/ownership-path/{entity_a_id}/{entity_b_id}")
+def get_ownership_path(entity_a_id: str, entity_b_id: str) -> dict:
+    """Find ownership chain connecting two entities."""
+    path = find_ownership_path(entity_a_id, entity_b_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="No ownership path found")
+    return path
+
+
+@router.get("/relationships/shared-directors/{entity_a_id}/{entity_b_id}")
+def get_shared_directors(entity_a_id: str, entity_b_id: str) -> dict:
+    """Find shared directors between two businesses."""
+    return find_shared_directors(entity_a_id, entity_b_id)
+
+
+@router.get("/relationships/director-path/{entity_a_id}/{entity_b_id}")
+def get_director_path(entity_a_id: str, entity_b_id: str) -> dict:
+    """Find path connecting two entities through director relationships."""
+    path = find_director_network_path(entity_a_id, entity_b_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="No director path found")
+    return path

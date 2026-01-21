@@ -1,0 +1,62 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+env:
+  VPS_HOST: ${{ secrets.VPS_HOST }}
+  VPS_USER: ${{ secrets.VPS_USER }}
+  VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+  DEPLOY_PATH: /opt/africgraph
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H $VPS_HOST >> ~/.ssh/known_hosts
+
+      - name: Copy files to VPS
+        run: |
+          ssh -i ~/.ssh/deploy_key $VPS_USER@$VPS_HOST << 'EOF'
+            cd $DEPLOY_PATH
+            git fetch origin
+            git reset --hard origin/main || git reset --hard origin/master
+          EOF
+
+      - name: Deploy application
+        run: |
+          ssh -i ~/.ssh/deploy_key $VPS_USER@$VPS_HOST << 'EOF'
+            cd $DEPLOY_PATH
+            ./deployment/scripts/deploy.sh production
+          EOF
+
+      - name: Health check
+        run: |
+          ssh -i ~/.ssh/deploy_key $VPS_USER@$VPS_HOST << 'EOF'
+            sleep 10
+            curl -f https://$VPS_HOST/health || exit 1
+          EOF
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment successful!"
+          else
+            echo "❌ Deployment failed!"
+            exit 1
+          fi

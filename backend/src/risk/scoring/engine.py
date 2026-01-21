@@ -6,6 +6,8 @@ from typing import Dict
 
 from src.infrastructure.database.neo4j_client import neo4j_client
 from src.infrastructure.logging import get_logger
+from src.cache.integrations import cached_risk_score
+from src.cache.invalidation import invalidate_risk_cache
 
 from .cashflow_analyzer import analyze_cashflow_health
 from .models import FactorScore, RiskScoreResult
@@ -28,6 +30,7 @@ WEIGHTS: Dict[str, float] = {
 }
 
 
+@cached_risk_score
 def compute_business_risk(business_id: str) -> RiskScoreResult:
     """Compute composite risk score for a business and persist history."""
     factors: Dict[str, FactorScore] = {}

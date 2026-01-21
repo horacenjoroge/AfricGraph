@@ -4,6 +4,10 @@ from typing import List, Optional
 from src.domain.models.business import Business
 from src.infrastructure.database.neo4j_client import neo4j_client
 from src.infrastructure.logging import get_logger
+from src.cache.integrations import cached_business
+from src.cache.service import make_cache_key, CacheService
+from src.cache.config import CacheKey, CacheTTL
+from src.cache.invalidation import invalidate_business_cache
 
 logger = get_logger(__name__)
 
@@ -16,8 +20,9 @@ def create_business(business: Business) -> str:
     return node_id
 
 
+@cached_business
 def get_business(business_id: str) -> Optional[Business]:
-    """Get business by ID."""
+    """Get business by ID (cached)."""
     node = neo4j_client.find_node("Business", {"id": business_id})
     if not node:
         return None
@@ -25,7 +30,7 @@ def get_business(business_id: str) -> Optional[Business]:
 
 
 def update_business(business_id: str, updates: dict) -> Optional[Business]:
-    """Update business properties."""
+    """Update business properties (invalidates cache)."""
     existing = get_business(business_id)
     if not existing:
         return None
@@ -37,6 +42,10 @@ def update_business(business_id: str, updates: dict) -> Optional[Business]:
 
     props = updated.to_node_properties()
     neo4j_client.merge_node("Business", business_id, props)
+    
+    # Invalidate cache
+    invalidate_business_cache(business_id)
+    
     logger.info("Business updated", business_id=business_id)
     return updated
 

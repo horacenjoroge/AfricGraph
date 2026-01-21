@@ -3,12 +3,15 @@ from typing import List, Optional
 
 from src.infrastructure.database.neo4j_client import neo4j_client
 from src.infrastructure.logging import get_logger
+from src.cache.integrations import cached_graph_query
+from src.cache.config import CacheKey, CacheTTL
 
 from .models import GraphNode, GraphRelationship, Path, Subgraph
 
 logger = get_logger(__name__)
 
 
+@cached_graph_query(key_type=CacheKey.SUBGRAPH, ttl=CacheTTL.SUBGRAPH)
 def extract_subgraph(
     node_id: str,
     max_hops: int = 2,
@@ -71,6 +74,7 @@ def extract_subgraph(
     return Subgraph(nodes=nodes, relationships=rels, center_node_id=center_id)
 
 
+@cached_graph_query(key_type=CacheKey.PATH, ttl=CacheTTL.PATH)
 def find_shortest_path(
     start_id: str,
     end_id: str,

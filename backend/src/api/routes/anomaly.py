@@ -46,7 +46,7 @@ def detect_transaction_anomalies_endpoint(
 
 @router.post("/detect/business", response_model=List[AnomalyScore])
 def detect_business_anomalies_endpoint(
-    method: str = Query("kmeans", regex="^(kmeans|dbscan)$"),
+    method: str = Query("kmeans", pattern="^(kmeans|dbscan)$"),
     n_clusters: int = Query(5, ge=2, le=20),
 ):
     """Detect business anomalies using clustering."""
@@ -60,7 +60,7 @@ def detect_business_anomalies_endpoint(
 @router.post("/detect/timeseries/{business_id}", response_model=List[AnomalyScore])
 def detect_timeseries_anomalies_endpoint(
     business_id: str,
-    metric: str = Query("transaction_volume", regex="^(transaction_volume|payment_amount|cashflow)$"),
+    metric: str = Query("transaction_volume", pattern="^(transaction_volume|payment_amount|cashflow)$"),
     threshold_std: float = Query(3.0, ge=1.0, le=5.0),
 ):
     """Detect time series anomalies for a business."""
@@ -106,7 +106,7 @@ def get_anomaly_score(
 @router.get("/alerts", response_model=List[AnomalyAlert])
 def get_alerts(
     entity_id: Optional[str] = None,
-    severity: Optional[str] = Query(None, regex="^(low|medium|high|critical)$"),
+    severity: Optional[str] = Query(None, pattern="^(low|medium|high|critical)$"),
     acknowledged: Optional[bool] = None,
     limit: int = Query(100, ge=1, le=1000),
 ):

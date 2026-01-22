@@ -42,7 +42,7 @@ def get_business_endpoint(business_id: str) -> BusinessResponse:
 def get_business_graph(
     business_id: str,
     max_hops: int = Query(2, ge=1, le=5),
-    format: str = Query("json", regex="^(json|visualization)$"),
+    format: str = Query("json", pattern="^(json|visualization)$"),
 ) -> dict:
     """Get subgraph around a business."""
     # First verify business exists

@@ -385,18 +385,18 @@ def create_invoices(business_ids: List[str], count: int = 100):
         # Description
         description = random.choice(INVOICE_DESCRIPTIONS)
         
-        # Create Invoice node
+        # Create Invoice node (using Invoice model structure)
         invoice_props = {
             "id": invoice_id,
-            "invoice_number": invoice_number,
+            "number": invoice_number,
+            "amount": float(total_amount),  # Invoice model uses 'amount' not 'total_amount'
+            "currency": "KES",
             "issue_date": issue_date.isoformat(),
             "due_date": due_date.isoformat(),
             "status": status,
+            "description": description,
             "subtotal": float(subtotal),
             "tax_amount": float(tax_amount),
-            "total_amount": float(total_amount),
-            "currency": "KES",
-            "description": description,
             "created_at": datetime.now().isoformat(),
         }
         

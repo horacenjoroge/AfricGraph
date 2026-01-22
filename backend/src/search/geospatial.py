@@ -1,6 +1,6 @@
 """Geospatial search functionality."""
 from typing import List, Dict, Optional
-from elasticsearch import ElasticsearchException
+from elasticsearch.exceptions import ElasticsearchException
 
 from src.infrastructure.search.elasticsearch_client import elasticsearch_client
 from src.search.indexing import INDEX_BUSINESSES

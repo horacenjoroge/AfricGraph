@@ -1,6 +1,6 @@
 """Faceted search with filters."""
 from typing import Dict, List, Optional
-from elasticsearch import ElasticsearchException
+from elasticsearch.exceptions import ElasticsearchException
 
 from src.infrastructure.search.elasticsearch_client import elasticsearch_client
 from src.search.indexing import INDEX_BUSINESSES, INDEX_TRANSACTIONS

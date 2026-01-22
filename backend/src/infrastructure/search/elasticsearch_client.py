@@ -1,6 +1,7 @@
 """Elasticsearch client."""
 from typing import Optional
 from elasticsearch import Elasticsearch
+from elasticsearch.exceptions import ElasticsearchException
 
 from src.config.settings import settings
 from src.infrastructure.logging import get_logger

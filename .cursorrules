@@ -1,0 +1,38 @@
+# AfricGraph Frontend Design Rules
+
+## Visual Style Guidelines
+
+- Prefer custom CSS-in-JS or advanced Tailwind for complex visual effects (e.g., glow, glass).
+- Never use default 'shadcn/ui' themes; always customize the design tokens to be dark/technical.
+- Use `framer-motion` for all state-based layout transitions.
+
+## Design Aesthetic: "High-Tech Data Observatory"
+
+### Color Palette
+- Background: Deep navy/midnight (#030712 or #0A0F1E)
+- Glass panels: backdrop-blur-md with 1px semi-transparent borders
+- Accent colors: Neons, Cyans, Deep Darks
+
+### Typography
+- Data values: Roboto Mono or JetBrains Mono (monospaced)
+- Headers: Clean technical sans-serif (Inter or Roboto Mono)
+
+### Components
+- NO standard white/light grey cards
+- NO Lucide/FontAwesome generic icons (use geometric shapes or SVG paths)
+- NO generic Tailwind "rounded-lg" borders
+- NO basic 2D charts
+
+### 3D Graph (react-force-graph-3d)
+- Nodes: Glowing spheres (color intensity = Risk Level)
+- Relationships: Thin, animated "data filaments"
+- High-risk nodes: Outer "warning" pulse effect
+
+### Micro-interactions
+- Subtle "scan-line" overlay effect on dashboard
+- framer-motion for "staggered" entry animations
+- Custom SVG "Ring" gauge for risk scores
+
+### Risk Visualization
+- Use "Radar" charts and "Liquid Fill" gauges
+- NOT standard bar charts

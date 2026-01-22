@@ -1,20 +1,30 @@
 import { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import {
+  DashboardIcon,
+  BusinessIcon,
+  GraphIcon,
+  RiskIcon,
+  AlertIcon,
+  WorkflowIcon,
+  AuditIcon,
+  SettingsIcon,
+} from '../icons/IconComponents'
 
 interface DashboardLayoutProps {
   children: ReactNode
 }
 
 const navItems = [
-  { path: '/', label: 'Dashboard', icon: '📊' },
-  { path: '/businesses', label: 'Businesses', icon: '🏢' },
-  { path: '/graph', label: 'Graph Explorer', icon: '🕸️' },
-  { path: '/risk', label: 'Risk Analysis', icon: '⚠️' },
-  { path: '/fraud', label: 'Fraud Alerts', icon: '🚨' },
-  { path: '/workflows', label: 'Workflows', icon: '📋' },
-  { path: '/audit', label: 'Audit Logs', icon: '📝' },
-  { path: '/settings', label: 'Settings', icon: '⚙️' },
+  { path: '/', label: 'Dashboard', Icon: DashboardIcon },
+  { path: '/businesses', label: 'Businesses', Icon: BusinessIcon },
+  { path: '/graph', label: 'Graph Explorer', Icon: GraphIcon },
+  { path: '/risk', label: 'Risk Analysis', Icon: RiskIcon },
+  { path: '/fraud', label: 'Fraud Alerts', Icon: AlertIcon },
+  { path: '/workflows', label: 'Workflows', Icon: WorkflowIcon },
+  { path: '/audit', label: 'Audit Logs', Icon: AuditIcon },
+  { path: '/settings', label: 'Settings', Icon: SettingsIcon },
 ]
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -24,40 +34,47 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="min-h-screen bg-deep-space flex">
       {/* Sidebar */}
       <aside className="w-64 glass-panel-strong border-r border-glass-border p-6">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold font-mono text-glow-blue">
-            AfricGraph
+        <div className="mb-8 pb-6 border-b border-glass-border">
+          <h1 className="text-2xl font-bold font-mono text-glow-cyan tracking-wider">
+            AFRICGRAPH
           </h1>
-          <p className="text-xs text-gray-400 mt-1">Intelligence Console</p>
+          <p className="text-xs text-gray-500 mt-1 font-mono">INTELLIGENCE CONSOLE v1.0</p>
         </div>
 
-        <nav className="space-y-2">
-          {navItems.map((item) => {
+        <nav className="space-y-1">
+          {navItems.map((item, index) => {
             const isActive = location.pathname === item.path
+            const Icon = item.Icon
             return (
-              <Link
+              <motion.div
                 key={item.path}
-                to={item.path}
-                className={`block px-4 py-3 rounded-lg transition-all ${
-                  isActive
-                    ? 'bg-glow-blue/20 text-blue-400 glow-blue'
-                    : 'text-gray-300 hover:bg-glass hover:text-white'
-                }`}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.05 }}
               >
-                <span className="mr-3">{item.icon}</span>
-                <span className="font-medium">{item.label}</span>
-              </Link>
+                <Link
+                  to={item.path}
+                  className={`flex items-center gap-3 px-4 py-3 transition-all ${
+                    isActive
+                      ? 'text-glow-cyan border-l-2 border-glow-cyan bg-glow-cyan/10'
+                      : 'text-gray-400 hover:text-white hover:bg-glass/50 border-l-2 border-transparent'
+                  }`}
+                >
+                  <Icon className={isActive ? 'text-glow-cyan' : ''} />
+                  <span className="font-medium text-sm">{item.label}</span>
+                </Link>
+              </motion.div>
             )
           })}
         </nav>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
           className="p-8"
         >
           {children}

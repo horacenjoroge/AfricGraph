@@ -148,14 +148,18 @@ export default function GraphExplorerPage() {
 
   return (
     <div className="h-screen flex flex-col bg-deep-space">
-      <div className="p-6 border-b border-glass-border">
-        <h1 className="text-3xl font-bold font-mono mb-2">Graph Explorer</h1>
-        <p className="text-gray-400">Interactive 3D knowledge graph visualization</p>
+      <div className="px-6 py-4 border-b border-glass-border glass-panel">
+        <h1 className="text-3xl font-bold font-mono mb-1 text-glow-cyan tracking-tight">
+          GRAPH EXPLORER
+        </h1>
+        <p className="text-gray-500 font-mono text-xs uppercase tracking-wider">
+          Interactive 3D Knowledge Graph Visualization
+        </p>
       </div>
 
       <div className="flex-1 flex relative overflow-hidden">
-        {/* Controls Sidebar */}
-        <div className="w-80 border-r border-glass-border overflow-y-auto p-6">
+        {/* Controls Sidebar - 40% */}
+        <div className="w-[40%] border-r border-glass-border overflow-y-auto p-6 glass-panel">
           <GraphControls
             onFilterChange={setFilters}
             onExport={exportGraph}
@@ -163,8 +167,8 @@ export default function GraphExplorerPage() {
           />
         </div>
 
-        {/* Graph Canvas */}
-        <div ref={graphContainerRef} className="flex-1 relative">
+        {/* Graph Canvas - 60% */}
+        <div ref={graphContainerRef} className="flex-1 relative" style={{ minHeight: '60vh' }}>
           {loading ? (
             <div className="absolute inset-0 flex items-center justify-center text-gray-400">
               <div className="text-center">
@@ -190,7 +194,7 @@ export default function GraphExplorerPage() {
               linkDirectionalArrowRelPos={1}
               linkCurvature={0.1}
               onNodeClick={handleNodeClick}
-              backgroundColor="#0A0F1E"
+              backgroundColor="#030712"
               showNavInfo={true}
               nodeThreeObject={(node: any) => {
                 const color = getNodeColorByType(node)

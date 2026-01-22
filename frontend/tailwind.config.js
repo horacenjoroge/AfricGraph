@@ -8,24 +8,26 @@ export default {
     extend: {
       colors: {
         'deep-space': {
-          DEFAULT: '#0A0F1E',
-          50: '#1A2B4A',
-          100: '#152238',
-          200: '#0F1A2E',
+          DEFAULT: '#030712',
+          50: '#0F172A',
+          100: '#1E293B',
+          200: '#334155',
         },
         'glass': {
           DEFAULT: 'rgba(255, 255, 255, 0.05)',
           border: 'rgba(255, 255, 255, 0.1)',
         },
         'glow': {
+          cyan: '#06B6D4',
           blue: '#3B82F6',
           purple: '#8B5CF6',
           red: '#EF4444',
           green: '#10B981',
+          neon: '#00FF88',
         },
       },
       fontFamily: {
-        mono: ['Roboto Mono', 'monospace'],
+        mono: ['JetBrains Mono', 'Roboto Mono', 'monospace'],
         sans: ['Inter', 'sans-serif'],
       },
       backdropBlur: {

@@ -17,6 +17,7 @@ export default function FraudAlertsPage() {
   const [alerts, setAlerts] = useState<FraudAlert[]>([])
   const [socket, setSocket] = useState<Socket | null>(null)
   const [loading, setLoading] = useState(false)
+  const { showError } = useNotifications()
 
   useEffect(() => {
     fetchAlerts()
@@ -43,8 +44,13 @@ export default function FraudAlertsPage() {
     try {
       const response = await axios.get('/api/v1/fraud/alerts')
       setAlerts(response.data.alerts || [])
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch alerts:', error)
+      if (error.response?.status === 404) {
+        showError('Fraud alerts endpoint not found')
+      } else {
+        showError('Failed to load fraud alerts')
+      }
     } finally {
       setLoading(false)
     }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import axios from 'axios'
+import { useNotifications } from '../contexts/NotificationContext'
 
 interface Business {
   id: string
@@ -15,6 +16,7 @@ export default function BusinessSearchPage() {
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [sectorFilter, setSectorFilter] = useState('')
+  const { showError, showInfo } = useNotifications()
 
   useEffect(() => {
     fetchBusinesses()
@@ -28,9 +30,22 @@ export default function BusinessSearchPage() {
       if (sectorFilter) params.append('sector', sectorFilter)
       
       const response = await axios.get(`/api/v1/businesses/search?${params}`)
-      setBusinesses(response.data.businesses || [])
-    } catch (error) {
+      const businesses = response.data.businesses || []
+      setBusinesses(businesses)
+      
+      if (businesses.length === 0 && (searchQuery || sectorFilter)) {
+        showInfo('No businesses found matching your search criteria')
+      }
+    } catch (error: any) {
       console.error('Failed to fetch businesses:', error)
+      if (error.response?.status === 404) {
+        showError('Business search endpoint not found. Please check if the API is running.')
+      } else if (error.response?.status === 403) {
+        showError('Access denied. Please check your tenant settings.')
+      } else {
+        showError(error.response?.data?.detail || 'Failed to search businesses. Please try again.')
+      }
+      setBusinesses([])
     } finally {
       setLoading(false)
     }

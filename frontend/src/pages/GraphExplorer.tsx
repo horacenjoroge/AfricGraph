@@ -110,9 +110,9 @@ export default function GraphExplorerPage() {
       
       setAllNodes(nodes)
       setAllLinks(links)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load subgraph:', error)
-      alert('Failed to load subgraph. Using mock data.')
+      // Error notification will be handled by the notification system if needed
       loadGraphData()
     } finally {
       setLoading(false)

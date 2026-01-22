@@ -115,7 +115,7 @@ def admin_subject():
     return SubjectAttributes(
         user_id="admin-1",
         role="admin",
-        business_id=None,
+        business_ids=None,
         permissions=["*"],
     )
 
@@ -128,7 +128,7 @@ def owner_subject():
     return SubjectAttributes(
         user_id="owner-1",
         role="owner",
-        business_id="business-123",
+        business_ids=["business-123"],
         permissions=["read", "write"],
     )
 
@@ -141,7 +141,7 @@ def analyst_subject():
     return SubjectAttributes(
         user_id="analyst-1",
         role="analyst",
-        business_id=None,
+        business_ids=None,
         permissions=["read"],
     )
 

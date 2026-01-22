@@ -18,7 +18,7 @@ class TestSubjectAttributes:
         subject = SubjectAttributes(
             user_id="user-1",
             role="admin",
-            business_id=None,
+            business_ids=None,
             permissions=["read", "write"],
         )
         assert subject.user_id == "user-1"
@@ -34,13 +34,13 @@ class TestResourceAttributes:
     def test_resource_attributes_creation(self):
         """Test creating ResourceAttributes."""
         resource = ResourceAttributes(
-            type="Business",
-            id="business-123",
+            resource_resource_type="Business",
+            id=["business-123"],
             owner_id="owner-1",
             sensitivity_level="public",
         )
         assert resource.type == "Business"
-        assert resource.id == "business-123"
+        assert resource.id == ["business-123"]
         assert resource.owner_id == "owner-1"
 
 
@@ -56,7 +56,7 @@ class TestEnvironmentAttributes:
         
         env = EnvironmentAttributes.from_request(mock_request)
         assert env.ip_address == "192.168.1.1"
-        assert env.timestamp is not None
+        assert env.time is not None
 
 
 @pytest.mark.unit
@@ -67,7 +67,7 @@ class TestABACEngine:
     def test_admin_authorization(self, admin_subject):
         """Test admin can access everything."""
         engine = AbacEngine()
-        resource = ResourceAttributes(type="Business", id="business-123")
+        resource = ResourceAttributes(resource_resource_type="Business", id=["business-123"])
         environment = EnvironmentAttributes()
         
         decision = engine.authorize(
@@ -82,8 +82,8 @@ class TestABACEngine:
         """Test owner can access their own business."""
         engine = AbacEngine()
         resource = ResourceAttributes(
-            type="Business",
-            id="business-123",
+            resource_resource_type="Business",
+            id=["business-123"],
             owner_id="owner-1",
         )
         environment = EnvironmentAttributes()
@@ -100,7 +100,7 @@ class TestABACEngine:
         """Test owner cannot access other businesses."""
         engine = AbacEngine()
         resource = ResourceAttributes(
-            type="Business",
+            resource_resource_type="Business",
             id="business-456",
             owner_id="owner-2",
         )
@@ -118,8 +118,8 @@ class TestABACEngine:
         """Test analyst can read non-sensitive data."""
         engine = AbacEngine()
         resource = ResourceAttributes(
-            type="Business",
-            id="business-123",
+            resource_resource_type="Business",
+            id=["business-123"],
             sensitivity_level="public",
         )
         environment = EnvironmentAttributes()
@@ -135,7 +135,7 @@ class TestABACEngine:
     def test_analyst_write_denied(self, analyst_subject):
         """Test analyst cannot write."""
         engine = AbacEngine()
-        resource = ResourceAttributes(type="Business", id="business-123")
+        resource = ResourceAttributes(resource_resource_type="Business", id=["business-123"])
         environment = EnvironmentAttributes()
         
         decision = engine.authorize(
@@ -149,11 +149,11 @@ class TestABACEngine:
     def test_time_based_restriction(self, admin_subject):
         """Test time-based access restrictions."""
         engine = AbacEngine()
-        resource = ResourceAttributes(type="Business", id="business-123")
+        resource = ResourceAttributes(resource_resource_type="Business", id=["business-123"])
         
         # Outside business hours
         env = EnvironmentAttributes(
-            timestamp=datetime.now().replace(hour=22, minute=0),
+            time=datetime.now().replace(hour=22, minute=0),
         )
         
         decision = engine.authorize(

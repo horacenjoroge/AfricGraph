@@ -1,5 +1,5 @@
 """Neo4j database client with connection pooling, CRUD, transactions, retry, streaming, timeout, and deadlock handling."""
-from typing import Dict, List, Optional, Any, Callable, Iterator
+from typing import Dict, List, Optional, Any, Callable, Iterator, TYPE_CHECKING
 from contextlib import contextmanager
 import time
 
@@ -10,12 +10,14 @@ from src.config.settings import settings
 from src.infrastructure.logging import get_logger
 import src.infrastructure.database.cypher_queries as cypher_queries
 from src.domain.ontology import NODE_LABELS, RELATIONSHIP_TYPES
-from src.security.abac import SubjectAttributes, Action
 from src.security.query_rewriter import (
     rewrite_node_query_with_permissions,
     rewrite_traversal_with_permissions,
 )
 from src.monitoring.instrumentation import track_neo4j_query
+
+if TYPE_CHECKING:
+    from src.security.abac import SubjectAttributes, Action
 
 logger = get_logger(__name__)
 
@@ -134,8 +136,8 @@ class Neo4jClient:
         limit: Optional[int] = None,
         timeout: Optional[float] = None,
         *,
-        subject: Optional[SubjectAttributes] = None,
-        action: Action = Action.READ,
+        subject: Optional["SubjectAttributes"] = None,
+        action: Optional["Action"] = None,
         node_alias: str = "n",
     ) -> List[Dict[str, Any]]:
         """
@@ -148,6 +150,9 @@ class Neo4jClient:
             parameters = {}
 
         if subject is not None:
+            from src.security.abac import Action as AbacAction
+            if action is None:
+                action = AbacAction.READ
             rewritten = rewrite_node_query_with_permissions(
                 query,
                 parameters,
@@ -260,8 +265,8 @@ class Neo4jClient:
         rel_types: Optional[List[str]] = None,
         max_depth: int = 3,
         *,
-        subject: Optional[SubjectAttributes] = None,
-        action: Action = Action.READ,
+        subject: Optional["SubjectAttributes"] = None,
+        action: Optional["Action"] = None,
     ) -> Dict[str, Any]:
         """
         Traverse from start_id along rel_types (or all) up to max_depth.
@@ -272,6 +277,9 @@ class Neo4jClient:
         params: Dict[str, Any] = {"start_id": int(start_id)}
 
         if subject is not None:
+            from src.security.abac import Action as AbacAction
+            if action is None:
+                action = AbacAction.READ
             rewritten = rewrite_traversal_with_permissions(
                 query,
                 params,

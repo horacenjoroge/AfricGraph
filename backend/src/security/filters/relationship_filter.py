@@ -3,12 +3,15 @@ from __future__ import annotations
 
 from typing import Dict, List, Tuple
 
-from src.security.abac import SubjectAttributes, Action
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.security.abac import SubjectAttributes, Action
 
 
 def build_relationship_where_fragments(
-    action: Action,
-    subject: SubjectAttributes,
+    action: "Action",
+    subject: "SubjectAttributes",
     rel_alias: str = "r",
     *,
     sensitivity_property: str = "sensitivity_level",
@@ -19,6 +22,8 @@ def build_relationship_where_fragments(
     Returns (cypher_snippet, params) where snippet is "" or "AND (...)".
     For now we mirror node sensitivity semantics on relationships.
     """
+    from src.security.abac import Action  # Import here to avoid circular import
+    
     clauses: List[str] = []
     params: Dict = {}
 

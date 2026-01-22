@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, TYPE_CHECKING
 
-from src.security.abac import Action, SubjectAttributes
+if TYPE_CHECKING:
+    from src.security.abac import Action, SubjectAttributes
+
 from src.security.filters.node_filter import build_node_where_fragments
 from src.security.filters.relationship_filter import build_relationship_where_fragments
 
@@ -49,11 +51,12 @@ def rewrite_node_query_with_permissions(
     cypher: str,
     params: Optional[Dict],
     *,
-    action: Action,
-    subject: SubjectAttributes,
+    action: "Action",
+    subject: "SubjectAttributes",
     node_alias: str = "n",
 ) -> RewrittenQuery:
     """Apply node-level permission filters to a Cypher query that returns nodes."""
+    from src.security.abac import Action, SubjectAttributes  # Import here to avoid circular import
     params = dict(params or {})
     frag, p = build_node_where_fragments(action, subject, node_alias=node_alias)
     if not frag:
@@ -67,8 +70,8 @@ def rewrite_traversal_with_permissions(
     cypher: str,
     params: Optional[Dict],
     *,
-    action: Action,
-    subject: SubjectAttributes,
+    action: "Action",
+    subject: "SubjectAttributes",
     node_alias: str = "n",
     rel_alias: str = "r",
 ) -> RewrittenQuery:
@@ -76,6 +79,7 @@ def rewrite_traversal_with_permissions(
     Apply node and relationship-level filters to traversal-style queries.
     Assumes aliases `n` for nodes and `r` for relationships in WITH/RETURN.
     """
+    from src.security.abac import Action, SubjectAttributes  # Import here to avoid circular import
     params = dict(params or {})
     node_frag, node_p = build_node_where_fragments(action, subject, node_alias=node_alias)
     rel_frag, rel_p = build_relationship_where_fragments(action, subject, rel_alias=rel_alias)

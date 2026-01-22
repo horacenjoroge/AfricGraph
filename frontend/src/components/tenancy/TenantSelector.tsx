@@ -113,7 +113,7 @@ export default function TenantSelector() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="absolute top-full mt-2 right-0 z-50 glass-panel-strong border border-glass-border rounded-lg p-2 min-w-[200px] max-h-[300px] overflow-y-auto"
+              className="absolute top-full mt-2 right-0 z-50 glass-panel-strong border border-glass-border rounded-lg p-2 min-w-[200px] max-h-[300px] overflow-y-auto shadow-lg"
             >
               {tenants.length === 0 ? (
                 <div className="px-4 py-3 text-sm text-gray-400 text-center">

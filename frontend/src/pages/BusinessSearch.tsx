@@ -19,10 +19,36 @@ export default function BusinessSearchPage() {
   const { showError, showInfo } = useNotifications()
 
   useEffect(() => {
-    fetchBusinesses()
+    // Only fetch if there's a search query or filter, or on initial load
+    if (searchQuery || sectorFilter) {
+      fetchBusinesses()
+    } else {
+      // On initial load without filters, fetch all businesses silently
+      fetchBusinessesSilent()
+    }
   }, [searchQuery, sectorFilter])
 
+  const fetchBusinessesSilent = async () => {
+    setLoading(true)
+    try {
+      const response = await axios.get(`/api/v1/businesses/search`)
+      const businesses = response.data.businesses || []
+      setBusinesses(businesses)
+    } catch (error: any) {
+      console.error('Failed to fetch businesses:', error)
+      // Silent failure on initial load - don't show notifications
+      setBusinesses([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const fetchBusinesses = async () => {
+    // Only fetch if there's actually a search query or filter
+    if (!searchQuery && !sectorFilter) {
+      return
+    }
+
     setLoading(true)
     try {
       const params = new URLSearchParams()

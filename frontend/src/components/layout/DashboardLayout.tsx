@@ -37,8 +37,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Sidebar */}
       <aside className="w-64 glass-panel-strong border-r border-glass-border p-6">
         <div className="mb-8 pb-6 border-b border-glass-border">
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-4">
+          <div className="mb-8 pb-6 border-b border-glass-border">
+            <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold font-mono text-glow-cyan tracking-wider">
                   AFRICGRAPH
@@ -47,7 +47,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </div>
               <ThemeToggle />
             </div>
-            <TenantSelector />
           </div>
         </div>
 
@@ -81,6 +80,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto relative z-10">
+        {/* Top Bar with Tenant Selector */}
+        <div className="sticky top-0 z-20 glass-panel border-b border-glass-border px-8 py-4 flex items-center justify-between">
+          <div></div>
+          <TenantSelector />
+        </div>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

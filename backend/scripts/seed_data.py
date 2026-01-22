@@ -356,7 +356,7 @@ def create_invoices(business_ids: List[str], count: int = 100):
     """Create realistic invoices."""
     logger.info(f"Creating {count} invoices...")
     
-    invoice_statuses = ["draft", "sent", "paid", "overdue", "cancelled"]
+    invoice_statuses = ["draft", "issued", "sent", "paid", "partial", "overdue", "cancelled"]
     
     for i in range(count):
         invoice_id = f"INV{i+1:05d}"

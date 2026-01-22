@@ -73,7 +73,7 @@ class TenantManager:
         now = datetime.now(timezone.utc)
         query = """
         INSERT INTO tenants (tenant_id, name, domain, status, config, created_at, updated_at)
-        VALUES (%(tenant_id)s, %(name)s, %(domain)s, 'active', %(config)s, %(created_at)s, %(updated_at)s)
+        VALUES (:tenant_id, :name, :domain, 'active', :config, :created_at, :updated_at)
         ON CONFLICT (tenant_id) DO UPDATE
         SET name = EXCLUDED.name,
             domain = EXCLUDED.domain,
@@ -99,7 +99,7 @@ class TenantManager:
         if not self._tables_ensured:
             self._ensure_tenant_tables()
             self._tables_ensured = True
-        query = "SELECT tenant_id, name, domain, status, config, created_at, updated_at FROM tenants WHERE tenant_id = %(tenant_id)s"
+        query = "SELECT tenant_id, name, domain, status, config, created_at, updated_at FROM tenants WHERE tenant_id = :tenant_id"
         with postgres_client.get_session() as session:
             result = session.execute(text(query), {"tenant_id": tenant_id})
             row = result.fetchone()
@@ -126,7 +126,7 @@ class TenantManager:
         params = {"limit": limit}
 
         if status:
-            conditions.append("status = %(status)s")
+            conditions.append("status = :status")
             params["status"] = status
 
         where_clause = " AND ".join(conditions)
@@ -136,7 +136,7 @@ class TenantManager:
         FROM tenants
         WHERE {where_clause}
         ORDER BY created_at DESC
-        LIMIT %(limit)s
+        LIMIT :limit
         """
         
         with postgres_client.get_session() as session:
@@ -169,31 +169,31 @@ class TenantManager:
         params = {"tenant_id": tenant_id, "updated_at": datetime.now(timezone.utc)}
 
         if name is not None:
-            updates.append("name = %(name)s")
+            updates.append("name = :name")
             params["name"] = name
 
         if domain is not None:
-            updates.append("domain = %(domain)s")
+            updates.append("domain = :domain")
             params["domain"] = domain
 
         if status is not None:
-            updates.append("status = %(status)s")
+            updates.append("status = :status")
             params["status"] = status
 
         if config is not None:
-            updates.append("config = %(config)s")
+            updates.append("config = :config")
             params["config"] = config
 
         if not updates:
             return self.get_tenant(tenant_id)
 
-        updates.append("updated_at = %(updated_at)s")
+        updates.append("updated_at = :updated_at")
         set_clause = ", ".join(updates)
 
         query = f"""
         UPDATE tenants
         SET {set_clause}
-        WHERE tenant_id = %(tenant_id)s
+        WHERE tenant_id = :tenant_id
         """
         
         with postgres_client.get_session() as session:
@@ -213,7 +213,7 @@ class TenantManager:
         """Set tenant-specific configuration."""
         query = """
         INSERT INTO tenant_configs (tenant_id, key, value, description, updated_at)
-        VALUES (%(tenant_id)s, %(key)s, %(value)s, %(description)s, NOW())
+        VALUES (:tenant_id, :key, :value, :description, NOW())
         ON CONFLICT (tenant_id, key) DO UPDATE
         SET value = EXCLUDED.value,
             description = EXCLUDED.description,
@@ -239,7 +239,7 @@ class TenantManager:
 
     def get_tenant_config(self, tenant_id: str, key: str) -> Optional[Any]:
         """Get tenant-specific configuration value."""
-        query = "SELECT value FROM tenant_configs WHERE tenant_id = %(tenant_id)s AND key = %(key)s"
+        query = "SELECT value FROM tenant_configs WHERE tenant_id = :tenant_id AND key = :key"
         with postgres_client.get_session() as session:
             result = session.execute(text(query), {"tenant_id": tenant_id, "key": key})
             row = result.fetchone()
@@ -247,7 +247,7 @@ class TenantManager:
 
     def get_all_tenant_configs(self, tenant_id: str) -> Dict[str, Any]:
         """Get all tenant configurations."""
-        query = "SELECT key, value FROM tenant_configs WHERE tenant_id = %(tenant_id)s"
+        query = "SELECT key, value FROM tenant_configs WHERE tenant_id = :tenant_id"
         with postgres_client.get_session() as session:
             result = session.execute(text(query), {"tenant_id": tenant_id})
             return {row["key"]: row["value"] for row in result}

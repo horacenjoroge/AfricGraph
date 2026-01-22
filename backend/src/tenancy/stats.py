@@ -43,7 +43,7 @@ class TenantStatsCollector:
         rel_count = rel_result[0]["count"] if rel_result else 0
 
         # Count users (from PostgreSQL)
-        user_query = "SELECT COUNT(*) as count FROM users WHERE tenant_id = %(tenant_id)s"
+        user_query = "SELECT COUNT(*) as count FROM users WHERE tenant_id = :tenant_id"
         with postgres_client.get_session() as session:
             result = session.execute(text(user_query), {"tenant_id": tenant_id})
             user_count = result.fetchone()["count"] if result.fetchone() else 0
@@ -55,7 +55,7 @@ class TenantStatsCollector:
         activity_query = """
         SELECT MAX(timestamp) as last_activity
         FROM audit_logs
-        WHERE tenant_id = %(tenant_id)s
+        WHERE tenant_id = :tenant_id
         """
         with postgres_client.get_session() as session:
             result = session.execute(text(activity_query), {"tenant_id": tenant_id})

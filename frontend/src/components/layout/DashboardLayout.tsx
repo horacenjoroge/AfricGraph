@@ -11,6 +11,7 @@ import {
   AuditIcon,
   SettingsIcon,
 } from '../icons/IconComponents'
+import ThemeToggle from '../ThemeToggle'
 
 interface DashboardLayoutProps {
   children: ReactNode
@@ -35,10 +36,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Sidebar */}
       <aside className="w-64 glass-panel-strong border-r border-glass-border p-6">
         <div className="mb-8 pb-6 border-b border-glass-border">
-          <h1 className="text-2xl font-bold font-mono text-glow-cyan tracking-wider">
-            AFRICGRAPH
-          </h1>
-          <p className="text-xs text-gray-500 mt-1 font-mono">INTELLIGENCE CONSOLE v1.0</p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-2xl font-bold font-mono text-glow-cyan tracking-wider">
+                AFRICGRAPH
+              </h1>
+              <p className="text-xs text-gray-500 mt-1 font-mono">INTELLIGENCE CONSOLE v1.0</p>
+            </div>
+            <ThemeToggle />
+          </div>
         </div>
 
         <nav className="space-y-1">
@@ -60,7 +66,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                       : 'text-gray-400 hover:text-white hover:bg-glass/50 border-l-2 border-transparent'
                   }`}
                 >
-                  <Icon className={isActive ? 'text-glow-cyan' : ''} />
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-glow-cyan' : ''}`} />
                   <span className="font-medium text-sm">{item.label}</span>
                 </Link>
               </motion.div>

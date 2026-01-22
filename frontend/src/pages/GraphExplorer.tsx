@@ -157,9 +157,10 @@ export default function GraphExplorerPage() {
         </p>
       </div>
 
-      <div className="flex-1 flex relative overflow-hidden">
+      <div className="flex-1 flex relative" style={{ height: 'calc(100vh - 100px)', overflow: 'hidden' }}>
         {/* Controls Sidebar - 40% */}
-        <div className="w-[40%] border-r border-glass-border overflow-y-auto p-6 glass-panel">
+        <div className="w-[40%] border-r border-glass-border overflow-y-auto p-6 glass-panel" style={{ maxHeight: '100%' }}>
+          <HowItWorks />
           <GraphControls
             onFilterChange={setFilters}
             onExport={exportGraph}
@@ -168,7 +169,7 @@ export default function GraphExplorerPage() {
         </div>
 
         {/* Graph Canvas - 60% */}
-        <div ref={graphContainerRef} className="flex-1 relative" style={{ minHeight: '60vh' }}>
+        <div ref={graphContainerRef} className="flex-1 relative" style={{ height: '100%', overflow: 'hidden' }}>
           {loading ? (
             <div className="absolute inset-0 flex items-center justify-center text-gray-400">
               <div className="text-center">

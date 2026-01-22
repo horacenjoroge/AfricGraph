@@ -5,12 +5,35 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --bg-primary: #030712;
+    --bg-secondary: rgba(255, 255, 255, 0.03);
+    --text-primary: #ffffff;
+    --text-secondary: #9ca3af;
+    --border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .light-mode {
+    --bg-primary: #f8fafc;
+    --bg-secondary: rgba(0, 0, 0, 0.03);
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --border-color: rgba(0, 0, 0, 0.1);
+  }
+
   body {
-    @apply bg-deep-space text-white font-sans;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
     margin: 0;
     padding: 0;
     overflow-x: hidden;
     position: relative;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  .light-mode body {
+    background-color: var(--bg-primary);
   }
 
   body::before {
@@ -30,6 +53,14 @@
     animation: scan-line 8s linear infinite;
   }
 
+  .light-mode body::before {
+    background: linear-gradient(
+      transparent 0%,
+      rgba(6, 182, 212, 0.01) 50%,
+      transparent 100%
+    );
+  }
+
   @keyframes scan-line {
     0% {
       transform: translateY(-100%);
@@ -46,17 +77,23 @@
 
 @layer components {
   .glass-panel {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
 
   .glass-panel-strong {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
+  }
+
+  .light-mode .glass-panel,
+  .light-mode .glass-panel-strong {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
   }
 
   .glow-blue {

@@ -13,10 +13,35 @@ from src.infrastructure.logging import get_logger
 router = APIRouter(prefix="/temporal", tags=["temporal"])
 logger = get_logger(__name__)
 
-query_engine = TemporalQueryEngine()
-snapshot_manager = SnapshotManager()
-history_manager = ChangeHistoryManager()
-restore_manager = RestoreManager()
+# Initialize managers lazily to avoid connection issues at import time
+query_engine = None
+snapshot_manager = None
+history_manager = None
+restore_manager = None
+
+def get_query_engine():
+    global query_engine
+    if query_engine is None:
+        query_engine = TemporalQueryEngine()
+    return query_engine
+
+def get_snapshot_manager():
+    global snapshot_manager
+    if snapshot_manager is None:
+        snapshot_manager = SnapshotManager()
+    return snapshot_manager
+
+def get_history_manager():
+    global history_manager
+    if history_manager is None:
+        history_manager = ChangeHistoryManager()
+    return history_manager
+
+def get_restore_manager():
+    global restore_manager
+    if restore_manager is None:
+        restore_manager = RestoreManager()
+    return restore_manager
 
 
 class TemporalQueryRequest(BaseModel):
@@ -51,7 +76,8 @@ def query_at_time(request: TemporalQueryRequest) -> dict:
     Returns nodes and relationships valid at the specified timestamp.
     """
     try:
-        result = query_engine.query_at_time(
+        engine = get_query_engine()
+        result = engine.query_at_time(
             timestamp=request.timestamp,
             node_ids=request.node_ids,
             relationship_ids=request.relationship_ids,
@@ -78,7 +104,8 @@ def get_node_history(
 ) -> dict:
     """Get version history for a node."""
     try:
-        history = history_manager.get_entity_history(
+        manager = get_history_manager()
+        history = manager.get_entity_history(
             entity_id=node_id,
             entity_type="node",
             start_time=start_time,
@@ -101,7 +128,8 @@ def get_relationship_history(
 ) -> dict:
     """Get version history for a relationship."""
     try:
-        history = history_manager.get_entity_history(
+        manager = get_history_manager()
+        history = manager.get_entity_history(
             entity_id=relationship_id,
             entity_type="relationship",
             start_time=start_time,
@@ -120,7 +148,8 @@ def get_relationship_history(
 def create_snapshot(request: SnapshotCreateRequest) -> dict:
     """Create a graph snapshot at a point in time."""
     try:
-        snapshot = snapshot_manager.create_snapshot(
+        manager = get_snapshot_manager()
+        snapshot = manager.create_snapshot(
             timestamp=request.timestamp,
             description=request.description,
         )
@@ -138,7 +167,8 @@ def list_snapshots(
 ) -> dict:
     """List graph snapshots."""
     try:
-        snapshots = snapshot_manager.list_snapshots(
+        manager = get_snapshot_manager()
+        snapshots = manager.list_snapshots(
             start_time=start_time,
             end_time=end_time,
             limit=limit,
@@ -155,7 +185,8 @@ def list_snapshots(
 @router.get("/snapshots/{snapshot_id}")
 def get_snapshot(snapshot_id: str) -> dict:
     """Get snapshot by ID."""
-    snapshot = snapshot_manager.get_snapshot(snapshot_id)
+    manager = get_snapshot_manager()
+    snapshot = manager.get_snapshot(snapshot_id)
     if not snapshot:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     return snapshot.model_dump(mode="json")
@@ -169,13 +200,14 @@ def restore_graph(request: RestoreRequest) -> dict:
     Can restore from timestamp or snapshot.
     """
     try:
+        manager = get_restore_manager()
         if request.snapshot_id:
-            result = restore_manager.restore_from_snapshot(
+            result = manager.restore_from_snapshot(
                 snapshot_id=request.snapshot_id,
                 dry_run=request.dry_run,
             )
         elif request.timestamp:
-            result = restore_manager.restore_to_timestamp(
+            result = manager.restore_to_timestamp(
                 timestamp=request.timestamp,
                 node_ids=request.node_ids,
                 relationship_ids=request.relationship_ids,
@@ -199,7 +231,8 @@ def get_changes(
 ) -> dict:
     """Get change history in a time frame."""
     try:
-        changes = history_manager.get_changes_in_timeframe(
+        manager = get_history_manager()
+        changes = manager.get_changes_in_timeframe(
             start_time=start_time or datetime.min,
             end_time=end_time or datetime.now(),
             entity_type=entity_type,
@@ -221,7 +254,8 @@ def get_change_summary(
 ) -> dict:
     """Get summary of changes."""
     try:
-        summary = history_manager.get_change_summary(
+        manager = get_history_manager()
+        summary = manager.get_change_summary(
             start_time=start_time,
             end_time=end_time,
         )

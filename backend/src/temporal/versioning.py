@@ -18,7 +18,7 @@ class TemporalVersioning:
 
     def __init__(self):
         """Initialize temporal versioning."""
-        self._ensure_versioning_tables()
+        # Table creation will happen on first use
 
     def _ensure_versioning_tables(self):
         """Ensure versioning tables exist in PostgreSQL."""
@@ -66,7 +66,9 @@ class TemporalVersioning:
         CREATE INDEX IF NOT EXISTS idx_change_history_entity ON change_history(entity_id, entity_type);
         CREATE INDEX IF NOT EXISTS idx_change_history_timestamp ON change_history(timestamp);
         """
-        postgres_client.execute(query)
+        with postgres_client.get_session() as session:
+            session.execute(text(query))
+            session.commit()
 
     def version_node(
         self,
@@ -89,6 +91,7 @@ class TemporalVersioning:
         Returns:
             TemporalNode instance
         """
+        self._ensure_versioning_tables()  # Ensure tables exist
         if timestamp is None:
             timestamp = datetime.now(timezone.utc)
 

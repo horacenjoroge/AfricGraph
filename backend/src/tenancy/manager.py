@@ -16,7 +16,7 @@ class TenantManager:
 
     def __init__(self):
         """Initialize tenant manager."""
-        self._ensure_tenant_tables()
+        self._tables_ensured = False
 
     def _ensure_tenant_tables(self):
         """Ensure tenant tables exist in PostgreSQL."""
@@ -67,6 +67,9 @@ class TenantManager:
         Returns:
             Tenant instance
         """
+        if not self._tables_ensured:
+            self._ensure_tenant_tables()
+            self._tables_ensured = True
         now = datetime.now(timezone.utc)
         query = """
         INSERT INTO tenants (tenant_id, name, domain, status, config, created_at, updated_at)
@@ -93,6 +96,9 @@ class TenantManager:
 
     def get_tenant(self, tenant_id: str) -> Optional[Tenant]:
         """Get tenant by ID."""
+        if not self._tables_ensured:
+            self._ensure_tenant_tables()
+            self._tables_ensured = True
         query = "SELECT tenant_id, name, domain, status, config, created_at, updated_at FROM tenants WHERE tenant_id = %(tenant_id)s"
         with postgres_client.get_session() as session:
             result = session.execute(text(query), {"tenant_id": tenant_id})

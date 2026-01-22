@@ -5,6 +5,8 @@ from uuid import uuid4
 
 from sqlalchemy import text
 
+from sqlalchemy import text
+
 from src.infrastructure.database.postgres_client import postgres_client
 from src.infrastructure.logging import get_logger
 from src.temporal.models import GraphSnapshot, TemporalNode, TemporalRelationship
@@ -18,8 +20,8 @@ class SnapshotManager:
 
     def __init__(self):
         """Initialize snapshot manager."""
-        self._ensure_snapshots_table()
         self.query_engine = TemporalQueryEngine()
+        # Table creation will happen on first use
 
     def _ensure_snapshots_table(self):
         """Ensure snapshots table exists."""
@@ -36,7 +38,9 @@ class SnapshotManager:
 
         CREATE INDEX IF NOT EXISTS idx_snapshots_timestamp ON graph_snapshots(timestamp);
         """
-        postgres_client.execute(query)
+        with postgres_client.get_session() as session:
+            session.execute(text(query))
+            session.commit()
 
     def create_snapshot(
         self,
@@ -55,6 +59,7 @@ class SnapshotManager:
         Returns:
             GraphSnapshot instance
         """
+        self._ensure_snapshots_table()  # Ensure table exists
         if timestamp is None:
             timestamp = datetime.now(timezone.utc)
 

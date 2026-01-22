@@ -3,6 +3,7 @@ import ForceGraph3D from 'react-force-graph-3d'
 import axios from 'axios'
 import GraphControls, { GraphFilters } from '../components/graph/GraphControls'
 import NodeDetailsPanel from '../components/graph/NodeDetailsPanel'
+import HowItWorks from '../components/HowItWorks'
 import {
   calculateNodeDegrees,
   filterGraph,

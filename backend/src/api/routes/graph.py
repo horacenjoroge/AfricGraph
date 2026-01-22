@@ -32,7 +32,7 @@ def get_subgraph(
     max_hops: int = Query(2, ge=1, le=5),
     rel_types: Optional[List[str]] = Query(None),
     node_labels: Optional[List[str]] = Query(None),
-    format: str = Query("json", regex="^(json|visualization|cypher)$"),
+    format: str = Query("json", pattern="^(json|visualization|cypher)$"),
 ) -> dict:
     """Extract N-hop neighborhood subgraph."""
     subgraph = extract_subgraph(node_id, max_hops, rel_types, node_labels)
@@ -135,7 +135,7 @@ def get_connections(
     entity_b_id: str,
     max_depth: int = Query(5, ge=1, le=10),
     include_all_paths: bool = Query(False),
-    format: str = Query("json", regex="^(json|visualization)$"),
+    format: str = Query("json", pattern="^(json|visualization)$"),
 ) -> dict:
     """
     Find how two entities are connected.

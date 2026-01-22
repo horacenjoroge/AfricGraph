@@ -19,13 +19,16 @@ class ElasticsearchClient:
     def connect(self) -> None:
         """Establish connection to Elasticsearch."""
         try:
-            # For Elasticsearch 8.x, specify API compatibility version 8
+            # For Elasticsearch 8.x, specify API compatibility version 8 in headers
             self.client = Elasticsearch(
                 [f"http://{settings.elasticsearch_host}:{settings.elasticsearch_port}"],
                 request_timeout=30,
                 verify_certs=False,
                 ssl_show_warn=False,
-                api_version="8",  # Use API version 8 for Elasticsearch 8.x
+                headers={
+                    "Accept": "application/vnd.elasticsearch+json; compatible-with=8",
+                    "Content-Type": "application/vnd.elasticsearch+json; compatible-with=8",
+                },
             )
             
             # Use info() instead of ping() to get better error messages

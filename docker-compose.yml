@@ -28,7 +28,7 @@ services:
     image: postgres:15-alpine
     container_name: africgraph-postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-africgraph}
       - POSTGRES_USER=${POSTGRES_USER:-africgraph}

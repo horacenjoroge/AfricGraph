@@ -19,16 +19,29 @@ class ElasticsearchClient:
     def connect(self) -> None:
         """Establish connection to Elasticsearch."""
         try:
+            # For Elasticsearch 8.x, specify API compatibility version 8
             self.client = Elasticsearch(
                 [f"http://{settings.elasticsearch_host}:{settings.elasticsearch_port}"],
-                request_timeout=10,
+                request_timeout=30,
+                verify_certs=False,
+                ssl_show_warn=False,
+                api_version="8",  # Use API version 8 for Elasticsearch 8.x
             )
-            if not self.client.ping():
-                raise ConnectionError("Elasticsearch ping failed")
-            logger.info(
-                "Elasticsearch connection established",
-                host=settings.elasticsearch_host,
-            )
+            
+            # Use info() instead of ping() to get better error messages
+            try:
+                info = self.client.info()
+                logger.info(
+                    "Elasticsearch connection established",
+                    host=settings.elasticsearch_host,
+                    version=info.get("version", {}).get("number", "unknown"),
+                )
+            except RequestError as e:
+                logger.error("Elasticsearch request failed", error=str(e), status_code=getattr(e, 'status_code', None))
+                raise ConnectionError(f"Elasticsearch connection failed: {e}")
+            except Exception as e:
+                logger.error("Elasticsearch connection error", error=str(e))
+                raise ConnectionError(f"Elasticsearch connection failed: {e}")
         except Exception as e:
             logger.error("Failed to connect to Elasticsearch", error=str(e))
             raise

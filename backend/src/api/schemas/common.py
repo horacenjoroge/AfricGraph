@@ -22,7 +22,7 @@ class FilterParams(BaseModel):
     limit: int = Field(20, ge=1, le=100)
     offset: int = Field(0, ge=0)
     sort_by: Optional[str] = None
-    sort_order: str = Field("asc", regex="^(asc|desc)$")
+    sort_order: str = Field("asc", pattern="^(asc|desc)$")
 
 
 class ErrorResponse(BaseModel):

@@ -60,16 +60,45 @@ export default function BusinessSearchPage() {
       setBusinesses(businesses)
       
       if (businesses.length === 0 && (searchQuery || sectorFilter)) {
-        showInfo('No businesses found matching your search criteria')
+        // Show specific message with the search query
+        const searchTerm = searchQuery || sectorFilter
+        showInfo(`No businesses found matching "${searchTerm}"`)
       }
     } catch (error: any) {
       console.error('Failed to fetch businesses:', error)
+      
+      // Check if it's a 404 with a specific business ID/name in the error
       if (error.response?.status === 404) {
-        showError('Business search endpoint not found. Please check if the API is running.')
+        const errorDetail = error.response?.data?.detail || ''
+        
+        // If the error mentions a specific business ID/name, show that
+        if (errorDetail.includes("Business '") || errorDetail.includes('not found')) {
+          // Extract business name/ID from error message
+          const match = errorDetail.match(/Business '([^']+)' not found/)
+          if (match && match[1]) {
+            showError(`Business "${match[1]}" not found`)
+          } else {
+            showError(errorDetail || 'Business not found')
+          }
+        } else {
+          // Generic 404 - might be endpoint not found
+          showError('Search endpoint not available. Please check if the API is running.')
+        }
       } else if (error.response?.status === 403) {
         showError('Access denied. Please check your tenant settings.')
       } else {
-        showError(error.response?.data?.detail || 'Failed to search businesses. Please try again.')
+        // Check if error has a specific business name/ID
+        const errorDetail = error.response?.data?.detail || ''
+        if (errorDetail.includes("Business '") || errorDetail.includes('not found')) {
+          const match = errorDetail.match(/Business '([^']+)' not found/)
+          if (match && match[1]) {
+            showError(`Business "${match[1]}" not found`)
+          } else {
+            showError(errorDetail)
+          }
+        } else {
+          showError(errorDetail || 'Failed to search businesses. Please try again.')
+        }
       }
       setBusinesses([])
     } finally {

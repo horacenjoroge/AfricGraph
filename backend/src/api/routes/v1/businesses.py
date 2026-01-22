@@ -29,12 +29,32 @@ def create_business_endpoint(body: BusinessCreate) -> BusinessResponse:
     return BusinessResponse.model_validate(business)
 
 
+@router.get("/search", response_model=BusinessSearchResponse)
+def search_businesses_endpoint(
+    query: str = Query(None),
+    sector: str = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> BusinessSearchResponse:
+    """Search businesses."""
+    businesses, total = search_businesses(query=query, sector=sector, limit=limit, offset=offset)
+    return BusinessSearchResponse(
+        businesses=[BusinessResponse.model_validate(b) for b in businesses],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @router.get("/{business_id}", response_model=BusinessResponse)
 def get_business_endpoint(business_id: str) -> BusinessResponse:
     """Get business by ID."""
     business = get_business(business_id)
     if not business:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Business not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Business '{business_id}' not found"
+        )
     return BusinessResponse.model_validate(business)
 
 
@@ -48,7 +68,10 @@ def get_business_graph(
     # First verify business exists
     business = get_business(business_id)
     if not business:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Business not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Business '{business_id}' not found"
+        )
 
     # Get node ID from Neo4j
     node = neo4j_client.find_node("Business", {"id": business_id})
@@ -67,20 +90,3 @@ def get_business_graph(
         from src.graph.export import export_subgraph_for_visualization
         return export_subgraph_for_visualization(subgraph)
     return subgraph.model_dump(mode="json")
-
-
-@router.get("/search", response_model=BusinessSearchResponse)
-def search_businesses_endpoint(
-    query: str = Query(None),
-    sector: str = Query(None),
-    limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
-) -> BusinessSearchResponse:
-    """Search businesses."""
-    businesses, total = search_businesses(query=query, sector=sector, limit=limit, offset=offset)
-    return BusinessSearchResponse(
-        businesses=[BusinessResponse.model_validate(b) for b in businesses],
-        total=total,
-        limit=limit,
-        offset=offset,
-    )

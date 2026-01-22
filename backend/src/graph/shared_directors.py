@@ -1,5 +1,5 @@
 """Shared director discovery between entities."""
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from src.infrastructure.database.neo4j_client import neo4j_client
 

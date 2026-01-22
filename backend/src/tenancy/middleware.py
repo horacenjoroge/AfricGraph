@@ -43,7 +43,9 @@ class TenantMiddleware(BaseHTTPMiddleware):
                     tenant = default_tenants[0]
                 else:
                     # Create a default tenant for development
+                    from uuid import uuid4
                     tenant = tenant_manager.create_tenant(
+                        tenant_id=str(uuid4()),
                         name="Default Tenant",
                         domain=None,
                         config={"development": True}

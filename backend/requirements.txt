@@ -36,8 +36,8 @@ pytz==2024.1
 structlog==24.1.0
 
 # Data Processing
-pandas==2.1.4
-numpy==1.26.3
+pandas>=2.2.0  # Updated for Python 3.13 compatibility
+numpy>=1.26.3
 
 # Machine Learning
 scikit-learn==1.4.0

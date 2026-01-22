@@ -6,7 +6,6 @@ pydantic-settings==2.1.0
 
 # GraphQL
 strawberry-graphql==0.215.0
-strawberry-fastapi==0.5.0
 
 # Database Drivers
 neo4j==5.15.0

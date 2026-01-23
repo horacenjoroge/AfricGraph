@@ -1,0 +1,298 @@
+{
+  "nodes": [
+    {
+      "id": "BIZ001",
+      "name": "Acme Corporation 1",
+      "labels": ["Business"],
+      "riskScore": 85,
+      "properties": {
+        "sector": "Technology",
+        "registration_number": "REG123456",
+        "country": "KE"
+      }
+    },
+    {
+      "id": "BIZ002",
+      "name": "TechStart Inc 2",
+      "labels": ["Business"],
+      "riskScore": 45,
+      "properties": {
+        "sector": "Finance",
+        "registration_number": "REG234567",
+        "country": "KE"
+      }
+    },
+    {
+      "id": "BIZ003",
+      "name": "Global Finance Ltd 3",
+      "labels": ["Business"],
+      "riskScore": 72,
+      "properties": {
+        "sector": "Finance",
+        "registration_number": "REG345678",
+        "country": "KE"
+      }
+    },
+    {
+      "id": "BIZ004",
+      "name": "RetailMax Stores 4",
+      "labels": ["Business"],
+      "riskScore": 38,
+      "properties": {
+        "sector": "Retail",
+        "registration_number": "REG456789",
+        "country": "KE"
+      }
+    },
+    {
+      "id": "BIZ005",
+      "name": "Manufacturing Pro 5",
+      "labels": ["Business"],
+      "riskScore": 91,
+      "properties": {
+        "sector": "Manufacturing",
+        "registration_number": "REG567890",
+        "country": "KE"
+      }
+    },
+    {
+      "id": "PERSON001",
+      "name": "John Smith",
+      "labels": ["Person"],
+      "properties": {
+        "email": "john.smith@gmail.com",
+        "phone": "+254712345678"
+      }
+    },
+    {
+      "id": "PERSON002",
+      "name": "Jane Doe",
+      "labels": ["Person"],
+      "properties": {
+        "email": "jane.doe@yahoo.com",
+        "phone": "+254713456789"
+      }
+    },
+    {
+      "id": "PERSON003",
+      "name": "Michael Johnson",
+      "labels": ["Person"],
+      "properties": {
+        "email": "michael.johnson@company.com",
+        "phone": "+254714567890"
+      }
+    },
+    {
+      "id": "PERSON004",
+      "name": "Sarah Williams",
+      "labels": ["Person"],
+      "properties": {
+        "email": "sarah.williams@business.com",
+        "phone": "+254715678901"
+      }
+    },
+    {
+      "id": "TXN001",
+      "name": "Transaction TXN001",
+      "labels": ["Transaction"],
+      "properties": {
+        "amount": 50000,
+        "currency": "KES",
+        "date": "2024-01-15",
+        "status": "completed"
+      }
+    },
+    {
+      "id": "TXN002",
+      "name": "Transaction TXN002",
+      "labels": ["Transaction"],
+      "properties": {
+        "amount": 25000,
+        "currency": "KES",
+        "date": "2024-01-20",
+        "status": "completed"
+      }
+    },
+    {
+      "id": "TXN003",
+      "name": "Transaction TXN003",
+      "labels": ["Transaction"],
+      "properties": {
+        "amount": 75000,
+        "currency": "KES",
+        "date": "2024-02-01",
+        "status": "pending"
+      }
+    },
+    {
+      "id": "INV001",
+      "name": "Invoice INV-2024-1234",
+      "labels": ["Invoice"],
+      "properties": {
+        "amount": 120000,
+        "currency": "KES",
+        "status": "paid",
+        "issue_date": "2024-01-10"
+      }
+    },
+    {
+      "id": "INV002",
+      "name": "Invoice INV-2024-2345",
+      "labels": ["Invoice"],
+      "properties": {
+        "amount": 85000,
+        "currency": "KES",
+        "status": "overdue",
+        "issue_date": "2024-01-25"
+      }
+    },
+    {
+      "id": "MM001",
+      "name": "M-Pesa Transaction MM001",
+      "labels": ["Transaction"],
+      "properties": {
+        "amount": 15000,
+        "currency": "KES",
+        "source_provider": "M-Pesa",
+        "type": "payment_in"
+      }
+    }
+  ],
+  "links": [
+    {
+      "source": "PERSON001",
+      "target": "BIZ001",
+      "type": "OWNS"
+    },
+    {
+      "source": "PERSON001",
+      "target": "BIZ002",
+      "type": "OWNS"
+    },
+    {
+      "source": "PERSON002",
+      "target": "BIZ001",
+      "type": "OWNS"
+    },
+    {
+      "source": "PERSON003",
+      "target": "BIZ003",
+      "type": "OWNS"
+    },
+    {
+      "source": "PERSON004",
+      "target": "BIZ004",
+      "type": "OWNS"
+    },
+    {
+      "source": "PERSON001",
+      "target": "BIZ003",
+      "type": "DIRECTS"
+    },
+    {
+      "source": "PERSON002",
+      "target": "BIZ005",
+      "type": "DIRECTS"
+    },
+    {
+      "source": "PERSON003",
+      "target": "BIZ001",
+      "type": "DIRECTS"
+    },
+    {
+      "source": "BIZ001",
+      "target": "BIZ002",
+      "type": "SUPPLIED_BY"
+    },
+    {
+      "source": "BIZ002",
+      "target": "BIZ003",
+      "type": "SUPPLIED_BY"
+    },
+    {
+      "source": "BIZ003",
+      "target": "BIZ004",
+      "type": "SUPPLIED_BY"
+    },
+    {
+      "source": "BIZ004",
+      "target": "BIZ005",
+      "type": "SUPPLIED_BY"
+    },
+    {
+      "source": "BIZ001",
+      "target": "BIZ003",
+      "type": "SUPPLIED_BY"
+    },
+    {
+      "source": "BIZ001",
+      "target": "TXN001",
+      "type": "HAS_TRANSACTION"
+    },
+    {
+      "source": "TXN001",
+      "target": "BIZ002",
+      "type": "TRANSACTION"
+    },
+    {
+      "source": "BIZ002",
+      "target": "TXN002",
+      "type": "HAS_TRANSACTION"
+    },
+    {
+      "source": "TXN002",
+      "target": "BIZ003",
+      "type": "TRANSACTION"
+    },
+    {
+      "source": "BIZ003",
+      "target": "TXN003",
+      "type": "HAS_TRANSACTION"
+    },
+    {
+      "source": "TXN003",
+      "target": "BIZ001",
+      "type": "TRANSACTION"
+    },
+    {
+      "source": "BIZ001",
+      "target": "INV001",
+      "type": "ISSUED"
+    },
+    {
+      "source": "INV001",
+      "target": "BIZ002",
+      "type": "ISSUED_TO"
+    },
+    {
+      "source": "BIZ002",
+      "target": "INV002",
+      "type": "ISSUED"
+    },
+    {
+      "source": "INV002",
+      "target": "BIZ003",
+      "type": "ISSUED_TO"
+    },
+    {
+      "source": "BIZ001",
+      "target": "MM001",
+      "type": "HAS_TRANSACTION"
+    },
+    {
+      "source": "MM001",
+      "target": "PERSON001",
+      "type": "INVOLVES"
+    },
+    {
+      "source": "BIZ002",
+      "target": "BIZ005",
+      "type": "SUPPLIED_BY"
+    },
+    {
+      "source": "BIZ005",
+      "target": "BIZ001",
+      "type": "SUPPLIED_BY"
+    }
+  ]
+}

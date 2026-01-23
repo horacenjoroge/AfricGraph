@@ -43,24 +43,42 @@ def extract_subgraph(
     MATCH (start)-[{rel_filter}*1..{max_hops}]-(n)
     {node_filter}
     WITH start, collect(DISTINCT n) as all_nodes
-    // Limit nodes to prevent memory overflow - use head() function
+    // Limit nodes to prevent memory overflow
     WITH start, 
          all_nodes[0..{max_nodes_limit}] as nodes
-    // Get relationships only between the limited set of nodes
+    // Get relationships between connected nodes
     UNWIND nodes as n1
     UNWIND nodes as n2
     WITH start, nodes, n1, n2
     WHERE id(n1) < id(n2)
-    OPTIONAL MATCH (n1)-[r{rel_filter}]-(n2)
-    // Filter out NULL relationships (when OPTIONAL MATCH doesn't find a relationship)
-    WITH start, nodes, n1, n2, r
-    WHERE r IS NOT NULL
-    WITH start, nodes, collect(DISTINCT {{
-        from: coalesce(n1.id, toString(id(n1))),
-        to: coalesce(n2.id, toString(id(n2))),
-        type: type(r),
-        props: properties(r)
-    }}) as relationships
+    OPTIONAL MATCH (n1)-[r1{rel_filter}]-(n2)
+    WITH start, nodes, r1, n1, n2
+    WHERE r1 IS NOT NULL
+    WITH start, nodes, 
+         collect(DISTINCT {{
+             from: coalesce(startNode(r1).id, toString(id(startNode(r1)))),
+             to: coalesce(endNode(r1).id, toString(id(endNode(r1)))),
+             type: type(r1),
+             props: properties(r1)
+         }}) as relationships_between
+    // Get relationships from start node to connected nodes (CRITICAL!)
+    // Handle both directions: start->n and n->start
+    UNWIND nodes as n
+    OPTIONAL MATCH (start)-[r2{rel_filter}]-(n)
+    WITH start, nodes, relationships_between, r2, n
+    WHERE r2 IS NOT NULL
+    WITH start, nodes, relationships_between,
+         collect(DISTINCT {{
+             from: coalesce(startNode(r2).id, toString(id(startNode(r2)))),
+             to: coalesce(endNode(r2).id, toString(id(endNode(r2)))),
+             type: type(r2),
+             props: properties(r2)
+         }}) as relationships_to_start
+    // Filter out NULL relationships and combine
+    WITH start, nodes, 
+         [r in relationships_between WHERE r.type IS NOT NULL] as rels_between,
+         [r in relationships_to_start WHERE r.type IS NOT NULL] as rels_to_start
+    WITH start, nodes, rels_between + rels_to_start as relationships
     RETURN 
         start.id as center_id,
         [x in nodes | {{
@@ -121,7 +139,8 @@ def find_shortest_path(
 
     query = f"""
     MATCH (a {{id: $start_id}}), (b {{id: $end_id}})
-    MATCH path = shortestPath((a)-[{rel_filter}*1..{max_depth}]->(b))
+    // Use bidirectional matching to find paths in either direction
+    MATCH path = shortestPath((a)-[{rel_filter}*1..{max_depth}]-(b))
     RETURN 
         [n in nodes(path) | {{id: coalesce(n.id, toString(id(n))), labels: labels(n), props: properties(n)}}] as nodes,
         [r in relationships(path) | {{type: type(r), from: coalesce(startNode(r).id, toString(id(startNode(r)))), to: coalesce(endNode(r).id, toString(id(endNode(r)))), props: properties(r)}}] as rels,
@@ -164,7 +183,8 @@ def find_all_paths(
 
     query = f"""
     MATCH (a {{id: $start_id}}), (b {{id: $end_id}})
-    MATCH path = (a)-[{rel_filter}*1..{max_depth}]->(b)
+    // Use bidirectional matching to find paths in either direction
+    MATCH path = (a)-[{rel_filter}*1..{max_depth}]-(b)
     RETURN 
         [n in nodes(path) | {{id: coalesce(n.id, toString(id(n))), labels: labels(n), props: properties(n)}}] as nodes,
         [r in relationships(path) | {{type: type(r), from: coalesce(startNode(r).id, toString(id(startNode(r)))), to: coalesce(endNode(r).id, toString(id(endNode(r)))), props: properties(r)}}] as rels,

@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from . import audit, businesses, relationships
 
 # Import existing routers that should be under v1
-from ...routes import anomaly, cache, ingestion, risk, fraud, workflows, ml, search
+from ...routes import anomaly, cache, ingestion, risk, fraud, workflows, ml, search, graph
 
 v1_router = APIRouter(prefix="/api/v1")
 
@@ -22,3 +22,7 @@ v1_router.include_router(ml.router)
 v1_router.include_router(anomaly.router)
 v1_router.include_router(cache.router)
 v1_router.include_router(search.router)
+# Include graph router under v1 - graph router already has /graph prefix
+# This will make it /api/v1/graph/...
+from ...routes.graph import router as graph_router
+v1_router.include_router(graph_router)

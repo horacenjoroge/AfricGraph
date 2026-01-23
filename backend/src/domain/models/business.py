@@ -20,4 +20,8 @@ class Business(BaseNamedEntity):
     @classmethod
     def from_node_properties(cls, data: dict) -> "Business":
         """Deserialize from Neo4j node properties."""
-        return cls.model_validate(data)
+        # Filter out fields that aren't in the Business model
+        # (e.g., parent_company which may be stored as a property but is actually a relationship)
+        allowed_fields = {"id", "name", "registration_number", "sector", "created_at"}
+        filtered_data = {k: v for k, v in data.items() if k in allowed_fields}
+        return cls.model_validate(filtered_data)

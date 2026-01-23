@@ -4,11 +4,15 @@ import axios from 'axios'
 import GraphControls, { GraphFilters } from '../components/graph/GraphControls'
 import NodeDetailsPanel from '../components/graph/NodeDetailsPanel'
 import HowItWorks from '../components/HowItWorks'
+import GraphLegend from '../components/graph/GraphLegend'
 import {
   calculateNodeDegrees,
+  calculateHopDistances,
   filterGraph,
   getNodeColorByType,
   getNodeSizeByImportance,
+  getNodeOpacity,
+  getLinkOpacity,
 } from '../utils/graphUtils'
 import { exportGraphAsImage, exportGraphAsJSON } from '../utils/exportGraph'
 
@@ -33,13 +37,21 @@ export default function GraphExplorerPage() {
   const [displayNodes, setDisplayNodes] = useState<Node[]>([])
   const [displayLinks, setDisplayLinks] = useState<Link[]>([])
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
+  const [focusedNode, setFocusedNode] = useState<Node | null>(null)
   const [loading, setLoading] = useState(false)
+  const [centerNodeId, setCenterNodeId] = useState<string | null>(null)
+  const [nodeHopDistances, setNodeHopDistances] = useState<Map<string, number>>(new Map())
+  const [nodeSizes, setNodeSizes] = useState<Map<string, number>>(new Map())
+  const [availableRelationshipTypes, setAvailableRelationshipTypes] = useState<string[]>([])
   const [filters, setFilters] = useState<GraphFilters>({
     nodeTypes: [],
     riskLevel: 'all',
     minRiskScore: 0,
     maxRiskScore: 100,
     showLabels: true,
+    relationshipTypes: [],
+    maxLayers: 5, // Show all layers by default (no progressive disclosure initially)
+    focusMode: false,
   })
   const graphRef = useRef<any>()
   const [graphDimensions, setGraphDimensions] = useState({ width: 800, height: 600 })
@@ -64,6 +76,46 @@ export default function GraphExplorerPage() {
     return () => window.removeEventListener('resize', updateDimensions)
   }, [])
 
+  // Calculate hop distances when center node or data changes
+  useEffect(() => {
+    if (centerNodeId && allNodes.length > 0) {
+      // Verify center node exists in nodes
+      const centerExists = allNodes.some(n => n.id === centerNodeId)
+      if (centerExists && allLinks.length > 0) {
+        const distances = calculateHopDistances(centerNodeId, allNodes, allLinks)
+        setNodeHopDistances(distances)
+        console.log('Hop distances calculated:', {
+          centerNodeId,
+          totalNodes: allNodes.length,
+          distancesCalculated: distances.size,
+          sampleDistances: Array.from(distances.entries()).slice(0, 5)
+        })
+      } else if (centerExists) {
+        // Center node exists but no links - set distance 0 for center only
+        const distances = new Map([[centerNodeId, 0]])
+        setNodeHopDistances(distances)
+      } else {
+        // Center node not found - clear distances
+        console.warn('Center node not found in nodes:', centerNodeId)
+        setNodeHopDistances(new Map())
+      }
+    } else {
+      setNodeHopDistances(new Map())
+    }
+  }, [centerNodeId, allNodes, allLinks])
+
+  // Calculate and lock node sizes once
+  useEffect(() => {
+    if (allNodes.length > 0) {
+      const nodesWithDegrees = calculateNodeDegrees(allNodes, allLinks)
+      const sizeMap = new Map<string, number>()
+      nodesWithDegrees.forEach(node => {
+        sizeMap.set(node.id, getNodeSizeByImportance(node))
+      })
+      setNodeSizes(sizeMap)
+    }
+  }, [allNodes, allLinks])
+
   useEffect(() => {
     // Recalculate degrees when nodes/links change
     if (allNodes.length === 0 && allLinks.length === 0) {
@@ -72,20 +124,32 @@ export default function GraphExplorerPage() {
       return
     }
 
-    console.log('Recalculating graph display:', {
-      nodeCount: allNodes.length,
-      linkCount: allLinks.length,
-      filters,
+    const nodesWithDegrees = calculateNodeDegrees(allNodes, allLinks)
+
+    // Debug logging
+    console.log('Filtering graph:', {
+      totalNodes: nodesWithDegrees.length,
+      totalLinks: allLinks.length,
+      centerNodeId,
+      hopDistancesSize: nodeHopDistances.size,
+      maxLayers: filters.maxLayers,
+      focusMode: filters.focusMode,
+      focusedNodeId: focusedNode?.id,
     })
 
-    const nodesWithDegrees = calculateNodeDegrees(allNodes, allLinks)
-    console.log('Nodes with degrees:', nodesWithDegrees.length)
-
-    // Apply filters
-    const filtered = filterGraph(nodesWithDegrees, allLinks, filters)
-    console.log('Filtered result:', {
-      nodeCount: filtered.nodes.length,
-      linkCount: filtered.links.length,
+    // Apply filters with new features
+    const filtered = filterGraph(
+      nodesWithDegrees,
+      allLinks,
+      filters,
+      centerNodeId,
+      nodeHopDistances,
+      focusedNode?.id || null
+    )
+    
+    console.log('After filtering:', {
+      filteredNodes: filtered.nodes.length,
+      filteredLinks: filtered.links.length,
     })
     
     // Create a node map for link resolution
@@ -99,7 +163,6 @@ export default function GraphExplorerPage() {
       const targetNode = nodeMap.get(targetId)
       
       if (!sourceNode || !targetNode) {
-        console.warn('Link references missing node:', { sourceId, targetId, link })
         return null
       }
       
@@ -110,11 +173,9 @@ export default function GraphExplorerPage() {
       }
     }).filter((link): link is Link => link !== null)
     
-    console.log('Resolved links:', resolvedLinks.length)
-    
     setDisplayNodes(filtered.nodes)
     setDisplayLinks(resolvedLinks)
-  }, [allNodes, allLinks, filters])
+  }, [allNodes, allLinks, filters, centerNodeId, nodeHopDistances, focusedNode])
 
   const loadGraphData = async () => {
     setLoading(true)
@@ -185,6 +246,23 @@ export default function GraphExplorerPage() {
         console.warn('Raw subgraph data:', JSON.stringify(subgraph, null, 2))
       }
       
+      // Set center node ID - use the requested nodeId if it exists in nodes, otherwise use first node
+      let centerId = nodeId
+      if (centerId && !nodes.find(n => n.id === centerId)) {
+        // Requested center node not found, use first node
+        centerId = nodes[0]?.id || null
+      } else if (!centerId) {
+        centerId = nodes[0]?.id || null
+      }
+      setCenterNodeId(centerId)
+      
+      // Reset focus when loading new subgraph
+      setFocusedNode(null)
+      
+      // Extract unique relationship types from links
+      const relTypes = Array.from(new Set(links.map(link => link.type).filter(Boolean)))
+      setAvailableRelationshipTypes(relTypes)
+      
       // Set nodes and links - this will trigger the useEffect to recalculate degrees and apply filters
       setAllNodes(nodes)
       setAllLinks(links)
@@ -219,6 +297,14 @@ export default function GraphExplorerPage() {
 
   const handleNodeClick = useCallback((node: any) => {
     setSelectedNode(node)
+    // Toggle focus mode on click if enabled
+    if (filters.focusMode) {
+      setFocusedNode(focusedNode?.id === node.id ? null : node)
+    }
+  }, [filters.focusMode, focusedNode])
+
+  const clearFocus = useCallback(() => {
+    setFocusedNode(null)
   }, [])
 
   const handleLoadNeighbors = useCallback((nodeId: string) => {
@@ -247,15 +333,74 @@ export default function GraphExplorerPage() {
         {/* Controls Sidebar - 40% */}
         <div className="w-[40%] border-r border-glass-border overflow-y-auto p-6 glass-panel" style={{ maxHeight: '100%' }}>
           <HowItWorks />
+          <GraphLegend />
           <GraphControls
-            onFilterChange={setFilters}
+            onFilterChange={(newFilters) => {
+              setFilters(newFilters)
+              // Clear focus when focus mode is disabled
+              if (!newFilters.focusMode && focusedNode) {
+                setFocusedNode(null)
+              }
+            }}
             onExport={exportGraph}
             onLoadSubgraph={loadSubgraph}
+            availableRelationshipTypes={availableRelationshipTypes}
           />
         </div>
 
         {/* Graph Canvas - 60% */}
         <div ref={graphContainerRef} className="flex-1 relative" style={{ height: '100%', overflow: 'hidden' }}>
+          {/* Summary Statistics Overlay */}
+          {displayNodes.length > 0 && (
+            <div className="absolute top-4 left-4 glass-panel-strong rounded-lg p-4 z-10 min-w-[200px]">
+              <h4 className="text-sm font-bold mb-2 text-cyan-400">Graph Summary</h4>
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Total Nodes:</span>
+                  <span className="font-mono">{displayNodes.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Connections:</span>
+                  <span className="font-mono">{displayLinks.length}</span>
+                </div>
+                {centerNodeId && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Center:</span>
+                    <span className="font-mono text-cyan-400">{centerNodeId}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Layers Shown:</span>
+                  <span className="font-mono">{filters.maxLayers}</span>
+                </div>
+                {filters.relationshipTypes.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-glass-border">
+                    <div className="text-gray-400 mb-1">Relationship Types:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {filters.relationshipTypes.map(type => (
+                        <span key={type} className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs">
+                          {type}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {focusedNode && (
+                  <div className="mt-2 pt-2 border-t border-glass-border">
+                    <div className="text-gray-400 mb-1">Focused:</div>
+                    <div className="font-mono text-yellow-400">{focusedNode.name || focusedNode.id}</div>
+                    <button
+                      onClick={clearFocus}
+                      className="mt-1 text-xs text-red-400 hover:text-red-300"
+                    >
+                      Clear Focus
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
           {loading ? (
             <div className="absolute inset-0 flex items-center justify-center text-gray-400">
               <div className="text-center">
@@ -294,11 +439,46 @@ export default function GraphExplorerPage() {
                 const degreeText = node.degree ? ` [${node.degree} connections]` : ''
                 return `${node.name}${riskText}${degreeText}`
               }}
-              nodeColor={(node: any) => getNodeColorByType(node)}
-              nodeVal={(node: any) => getNodeSizeByImportance(node)}
+              nodeColor={(node: any) => {
+                const color = getNodeColorByType(node)
+                const opacity = getNodeOpacity(
+                  node.id,
+                  nodeHopDistances,
+                  centerNodeId,
+                  focusedNode?.id || null,
+                  filters.focusMode
+                )
+                // Convert hex to rgba with opacity
+                const r = parseInt(color.slice(1, 3), 16)
+                const g = parseInt(color.slice(3, 5), 16)
+                const b = parseInt(color.slice(5, 7), 16)
+                return `rgba(${r}, ${g}, ${b}, ${opacity})`
+              }}
+              nodeVal={(node: any) => {
+                // Use locked size to prevent Framer Motion size jumps
+                const lockedSize = nodeSizes.get(node.id)
+                return getNodeSizeByImportance(node, lockedSize)
+              }}
               linkLabel={(link: any) => (filters.showLabels ? link.type : '')}
-              linkColor={() => 'rgba(255, 255, 255, 0.3)'}
-              linkWidth={1}
+              linkColor={(link: any) => {
+                const opacity = getLinkOpacity(
+                  link,
+                  focusedNode?.id || null,
+                  filters.focusMode
+                )
+                return `rgba(255, 255, 255, ${opacity})`
+              }}
+              linkWidth={(link: any) => {
+                // Make links to focused node thicker
+                if (filters.focusMode && focusedNode) {
+                  const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+                  const targetId = typeof link.target === 'string' ? link.target : link.target.id
+                  if (sourceId === focusedNode.id || targetId === focusedNode.id) {
+                    return 2
+                  }
+                }
+                return 1
+              }}
               linkDirectionalArrowLength={4}
               linkDirectionalArrowRelPos={1}
               linkCurvature={0.1}
@@ -343,16 +523,24 @@ export default function GraphExplorerPage() {
                 
                 const THREE = (window as any).THREE
                 const color = getNodeColorByType(node)
-                const size = getNodeSizeByImportance(node)
+                const lockedSize = nodeSizes.get(node.id)
+                const size = getNodeSizeByImportance(node, lockedSize)
+                const opacity = getNodeOpacity(
+                  node.id,
+                  nodeHopDistances,
+                  centerNodeId,
+                  focusedNode?.id || null,
+                  filters.focusMode
+                )
                 
-                // Create glowing sphere
+                // Create glowing sphere with opacity
                 const geometry = new THREE.SphereGeometry(size / 10, 16, 16)
                 const material = new THREE.MeshPhongMaterial({
                   color,
                   transparent: true,
-                  opacity: 0.9,
+                  opacity: opacity * 0.9, // Apply visual hierarchy opacity
                   emissive: color,
-                  emissiveIntensity: 0.3,
+                  emissiveIntensity: node.id === centerNodeId ? 0.5 : 0.3, // Center node glows more
                 })
                 const sphere = new THREE.Mesh(geometry, material)
                 

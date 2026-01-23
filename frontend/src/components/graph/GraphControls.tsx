@@ -4,6 +4,7 @@ interface GraphControlsProps {
   onFilterChange: (filters: GraphFilters) => void
   onExport: () => void
   onLoadSubgraph: (nodeId: string, maxHops: number) => void
+  availableRelationshipTypes?: string[]
 }
 
 export interface GraphFilters {
@@ -12,15 +13,21 @@ export interface GraphFilters {
   minRiskScore: number
   maxRiskScore: number
   showLabels: boolean
+  relationshipTypes: string[] // Filter by relationship types
+  maxLayers: number // Progressive disclosure - show up to N layers
+  focusMode: boolean // Focus on selected node only
 }
 
-export default function GraphControls({ onFilterChange, onExport, onLoadSubgraph }: GraphControlsProps) {
+export default function GraphControls({ onFilterChange, onExport, onLoadSubgraph, availableRelationshipTypes = [] }: GraphControlsProps) {
   const [filters, setFilters] = useState<GraphFilters>({
     nodeTypes: [],
     riskLevel: 'all',
     minRiskScore: 0,
     maxRiskScore: 100,
     showLabels: true,
+    relationshipTypes: [],
+    maxLayers: 5, // Show all layers by default (user can reduce if needed)
+    focusMode: false,
   })
   const [subgraphNodeId, setSubgraphNodeId] = useState('')
   const [maxHops, setMaxHops] = useState(2)
@@ -109,6 +116,78 @@ export default function GraphControls({ onFilterChange, onExport, onLoadSubgraph
           />
           <span className="text-sm">Show Relationship Labels</span>
         </label>
+      </div>
+
+      {/* Relationship Type Filter */}
+      <div>
+        <label className="block text-sm font-medium mb-2">Relationship Types</label>
+        {availableRelationshipTypes.length === 0 ? (
+          <div className="text-xs text-gray-400">Load a subgraph to see relationship types</div>
+        ) : (
+          <div className="space-y-2 max-h-32 overflow-y-auto">
+            {availableRelationshipTypes.map((type) => (
+            <label key={type} className="flex items-center">
+              <input
+                type="checkbox"
+                checked={filters.relationshipTypes.includes(type)}
+                onChange={(e) => {
+                  const newTypes = e.target.checked
+                    ? [...filters.relationshipTypes, type]
+                    : filters.relationshipTypes.filter((t) => t !== type)
+                  handleFilterChange({ relationshipTypes: newTypes })
+                }}
+                className="mr-2"
+              />
+              <span className="text-sm">{type}</span>
+            </label>
+            ))}
+          </div>
+        )}
+        {filters.relationshipTypes.length > 0 && (
+          <button
+            onClick={() => handleFilterChange({ relationshipTypes: [] })}
+            className="mt-2 text-xs text-blue-400 hover:text-blue-300"
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+
+      {/* Progressive Disclosure - Max Layers */}
+      <div>
+        <label className="block text-sm font-medium mb-2">
+          Show Layers: {filters.maxLayers === 5 ? 'All' : filters.maxLayers}
+        </label>
+        <input
+          type="range"
+          min="1"
+          max="5"
+          value={filters.maxLayers}
+          onChange={(e) => handleFilterChange({ maxLayers: parseInt(e.target.value) })}
+          className="w-full"
+        />
+        <div className="text-xs text-gray-400 mt-1">
+          {filters.maxLayers === 5 
+            ? 'Showing all layers (no limit)'
+            : `Layer ${filters.maxLayers} = Center + up to ${filters.maxLayers} hops away`
+          }
+        </div>
+      </div>
+
+      {/* Focus Mode Toggle */}
+      <div>
+        <label className="flex items-center">
+          <input
+            type="checkbox"
+            checked={filters.focusMode}
+            onChange={(e) => handleFilterChange({ focusMode: e.target.checked })}
+            className="mr-2"
+          />
+          <span className="text-sm">Focus Mode</span>
+        </label>
+        <div className="text-xs text-gray-400 mt-1 ml-6">
+          Click a node to highlight only its connections
+        </div>
       </div>
 
       {/* Subgraph Loader */}

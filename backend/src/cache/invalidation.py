@@ -56,7 +56,9 @@ def invalidate_graph_cache(node_id: Optional[str] = None):
 def invalidate_risk_cache(business_id: Optional[str] = None):
     """Invalidate risk score cache."""
     if business_id:
-        CacheService.invalidate(CacheKey.RISK_SCORE, business_id)
+        # The cache key includes function name, so we need to use pattern matching
+        # Cache key format: risk_score:compute_business_risk:BIZ003
+        CacheService.invalidate_pattern(CacheKey.RISK_SCORE, f"*{business_id}*")
     else:
         CacheService.invalidate_pattern(CacheKey.RISK_SCORE)
 

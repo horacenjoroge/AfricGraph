@@ -18,7 +18,7 @@ def analyze_supplier_concentration(business_id: str) -> FactorScore:
     """
     query = """
     MATCH (b:Business {id: $business_id})-[:BUYS_FROM]->(s:Supplier)
-    OPTIONAL MATCH (b)-[:BUYS_FROM]->(s)-[:INVOLVES|:SUPPLIES*0..1]->(t:Transaction)
+    OPTIONAL MATCH (b)-[:BUYS_FROM]->(s)-[:INVOLVES|SUPPLIES*0..1]->(t:Transaction)
     WITH s, coalesce(sum(t.amount), 1.0) AS volume
     WITH collect(volume) AS vols
     WITH vols, reduce(total = 0.0, v IN vols | total + v) AS total

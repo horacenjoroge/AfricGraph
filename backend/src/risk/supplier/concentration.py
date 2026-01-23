@@ -32,7 +32,7 @@ def compute_supplier_concentration(business_id: str) -> SupplierConcentrationRes
     """
     query = """
     MATCH (b:Business {id: $business_id})-[:BUYS_FROM]->(s:Supplier)
-    OPTIONAL MATCH (b)-[:BUYS_FROM]->(s)-[:INVOLVES|:SUPPLIES*0..1]->(t:Transaction)
+    OPTIONAL MATCH (b)-[:BUYS_FROM]->(s)-[:INVOLVES|SUPPLIES*0..1]->(t:Transaction)
     WITH s, coalesce(sum(t.amount), 1.0) AS volume
     RETURN s.id AS supplier_id, s.name AS supplier_name, volume
     ORDER BY volume DESC

@@ -18,7 +18,7 @@ def analyze_network_exposure(business_id: str) -> FactorScore:
     """
     query = """
     MATCH (b:Business {id: $business_id})
-    OPTIONAL MATCH path = (b)-[:INVOLVES|:BUYS_FROM|:SELLS_TO*1..3]-(other:Business)
+    OPTIONAL MATCH path = (b)-[:INVOLVES|BUYS_FROM|SELLS_TO*1..3]-(other:Business)
     WHERE other.high_risk_flag = true
     WITH collect(DISTINCT other) AS risky
     RETURN size(risky) AS risky_count

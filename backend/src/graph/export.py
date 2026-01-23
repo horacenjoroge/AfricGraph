@@ -16,6 +16,8 @@ def export_subgraph_for_visualization(subgraph: Subgraph) -> Dict:
             "label": n.properties.get("name") or n.id,
             "labels": n.labels,
             "properties": n.properties,
+            # Include risk_score if available for frontend filtering
+            "riskScore": n.properties.get("risk_score") or n.properties.get("riskScore"),
         }
         for n in subgraph.nodes
     ]
@@ -48,6 +50,8 @@ def export_path_for_visualization(path) -> Dict:
             "label": n.properties.get("name") or n.id,
             "labels": n.labels,
             "properties": n.properties,
+            # Include risk_score if available for frontend filtering
+            "riskScore": n.properties.get("risk_score") or n.properties.get("riskScore"),
         }
         for n in path.nodes
     ]

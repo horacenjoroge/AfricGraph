@@ -24,6 +24,9 @@ def serialize_value(value: Any) -> str:
     """Serialize value for caching."""
     if isinstance(value, str):
         return value
+    # Handle Pydantic models
+    if hasattr(value, 'model_dump'):
+        return json.dumps(value.model_dump(mode='json'), default=str)
     return json.dumps(value, default=str)
 
 

@@ -52,6 +52,9 @@ def extract_subgraph(
     WITH start, nodes, n1, n2
     WHERE id(n1) < id(n2)
     OPTIONAL MATCH (n1)-[r{rel_filter}]-(n2)
+    // Filter out NULL relationships (when OPTIONAL MATCH doesn't find a relationship)
+    WITH start, nodes, n1, n2, r
+    WHERE r IS NOT NULL
     WITH start, nodes, collect(DISTINCT {{
         from: coalesce(n1.id, toString(id(n1))),
         to: coalesce(n2.id, toString(id(n2))),
@@ -94,9 +97,10 @@ def extract_subgraph(
             type=r["type"],
             from_id=str(r["from"]),
             to_id=str(r["to"]),
-            properties=r.get("props", {}),
+            properties=r.get("props", {}) or {},
         )
         for r in row.get("relationships", [])
+        if r.get("type") is not None  # Skip NULL relationships (defensive check)
     ]
 
     return Subgraph(nodes=nodes, relationships=rels, center_node_id=center_id)

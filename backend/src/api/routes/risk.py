@@ -99,3 +99,13 @@ def get_supplier_risk(business_id: str) -> dict:
     return analyze_supplier_risk(business_id)
 
 
+@router.get("/{business_id}")
+def get_risk_score(business_id: str) -> dict:
+    """
+    Compute and return current risk score for a business.
+    
+    This is an alias for /business/{business_id} to match frontend expectations.
+    Must be defined last to avoid conflicts with /cashflow/{business_id} and /suppliers/{business_id}.
+    """
+    return get_business_risk(business_id)
+

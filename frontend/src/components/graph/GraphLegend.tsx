@@ -69,7 +69,11 @@ export default function GraphLegend() {
       </div>
       
       <div className="mt-4 pt-4 border-t border-glass-border">
-        <div className="text-xs text-gray-400 space-y-1">
+        <div className="text-xs text-gray-400 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-cyan-400 border border-cyan-300" style={{ boxShadow: '0 0 8px rgba(0, 255, 255, 0.6)' }} />
+            <span className="font-medium text-cyan-300">Center node (bright cyan, pulsing)</span>
+          </div>
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-white/20 border border-white/40" />
             <span>Node size indicates importance (connections + risk)</span>
@@ -77,6 +81,10 @@ export default function GraphLegend() {
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-white/10 border border-white/20" />
             <span>Faded nodes are further from center</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-4 bg-cyan-400 rounded" style={{ boxShadow: '0 0 4px rgba(0, 255, 255, 0.6)' }} />
+            <span>Cyan lines connect to center node</span>
           </div>
         </div>
       </div>

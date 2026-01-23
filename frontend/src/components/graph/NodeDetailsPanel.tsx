@@ -102,12 +102,12 @@ export default function NodeDetailsPanel({ node, onClose, onLoadNeighbors }: Nod
                 ))}
               </div>
             </div>
-            {node.degree !== undefined && (
-              <div>
-                <span className="text-gray-400">Connections:</span>{' '}
-                <span className="font-mono">{node.degree}</span>
-              </div>
-            )}
+            <div>
+              <span className="text-gray-400">Connections:</span>{' '}
+              <span className="font-mono">
+                {details?.connections?.length ?? node.degree ?? 0}
+              </span>
+            </div>
           </div>
         </div>
 

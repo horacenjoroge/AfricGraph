@@ -55,6 +55,7 @@ export default function GraphExplorerPage() {
   })
   const graphRef = useRef<any>()
   const [graphDimensions, setGraphDimensions] = useState({ width: 800, height: 600 })
+  const [cameraDistance, setCameraDistance] = useState(400)
 
   useEffect(() => {
     loadGraphData()
@@ -150,10 +151,60 @@ export default function GraphExplorerPage() {
     console.log('After filtering:', {
       filteredNodes: filtered.nodes.length,
       filteredLinks: filtered.links.length,
+      centerNodeId,
     })
+    
+    // Debug: Check links connected to center node
+    if (centerNodeId) {
+      const centerLinks = filtered.links.filter(link => {
+        const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+        const targetId = typeof link.target === 'string' ? link.target : link.target.id
+        return sourceId === centerNodeId || targetId === centerNodeId
+      })
+      console.log('Links connected to center node:', centerLinks.length)
+      console.log('Center node links:', centerLinks.map(link => ({
+        source: typeof link.source === 'string' ? link.source : link.source.id,
+        target: typeof link.target === 'string' ? link.target : link.target.id,
+        type: link.type
+      })))
+    }
     
     // Create a node map for link resolution
     const nodeMap = new Map(filtered.nodes.map(n => [n.id, n]))
+    
+    // Initialize node positions - start all nodes close together so links can work
+    if (centerNodeId && nodeHopDistances.size > 0) {
+      filtered.nodes.forEach((node: any) => {
+        if (node.id === centerNodeId) {
+          // Center node at origin - don't hard pin, use centering force instead
+          node.x = 0
+          node.y = 0
+          node.z = 0
+          // Don't hard pin - let centering force handle it
+          node.fx = undefined
+          node.fy = undefined
+          node.fz = undefined
+        } else {
+          // Position other nodes close to center initially - link forces will organize them
+          const distance = nodeHopDistances.get(node.id) || 1
+          // Start very close so link forces can immediately pull them
+          const radius = distance === 1 ? 30 : distance * 60
+          
+          // Random position on sphere at this radius
+          const theta = Math.random() * Math.PI * 2 // Azimuth
+          const phi = Math.acos(Math.random() * 2 - 1) // Polar angle
+          
+          node.x = radius * Math.sin(phi) * Math.cos(theta)
+          node.y = radius * Math.sin(phi) * Math.sin(theta)
+          node.z = radius * Math.cos(phi)
+          
+          // Don't pin non-center nodes
+          node.fx = undefined
+          node.fy = undefined
+          node.fz = undefined
+        }
+      })
+    }
     
     // Convert link source/target from IDs to node objects for react-force-graph-3d
     const resolvedLinks = filtered.links.map(link => {
@@ -232,14 +283,21 @@ export default function GraphExplorerPage() {
       })
       
       const links: Link[] = edges.map((r: any) => ({
-        source: String(r.source || r.from_id),
-        target: String(r.target || r.to_id),
+        source: String(r.source || r.from || r.from_id),
+        target: String(r.target || r.to || r.to_id),
         type: r.type || '',
       }))
       
       console.log('Transformed nodes:', nodes)
       console.log('Transformed links:', links)
       console.log('Node count:', nodes.length, 'Link count:', links.length)
+      
+      // Debug: Check links connected to the requested center node
+      const centerLinks = links.filter(link => {
+        return link.source === nodeId || link.target === nodeId
+      })
+      console.log(`Links connected to ${nodeId}:`, centerLinks.length)
+      console.log('Sample center links:', centerLinks.slice(0, 5))
       
       if (nodes.length === 0) {
         console.warn('No nodes found in subgraph response')
@@ -259,9 +317,29 @@ export default function GraphExplorerPage() {
       // Reset focus when loading new subgraph
       setFocusedNode(null)
       
+      // Reset camera distance when loading new subgraph
+      setCameraDistance(400)
+      
       // Extract unique relationship types from links
       const relTypes = Array.from(new Set(links.map(link => link.type).filter(Boolean)))
       setAvailableRelationshipTypes(relTypes)
+      
+      // Debug: Log what we received
+      console.log('Loaded subgraph:', {
+        centerNodeId: centerId,
+        totalNodes: nodes.length,
+        totalLinks: links.length,
+        centerNodeLinks: links.filter(link => {
+          const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+          const targetId = typeof link.target === 'string' ? link.target : link.target.id
+          return sourceId === centerId || targetId === centerId
+        }).length,
+        sampleLinks: links.slice(0, 5).map(link => ({
+          source: typeof link.source === 'string' ? link.source : link.source.id,
+          target: typeof link.target === 'string' ? link.target : link.target.id,
+          type: link.type
+        }))
+      })
       
       // Set nodes and links - this will trigger the useEffect to recalculate degrees and apply filters
       setAllNodes(nodes)
@@ -350,6 +428,42 @@ export default function GraphExplorerPage() {
 
         {/* Graph Canvas - 60% */}
         <div ref={graphContainerRef} className="flex-1 relative" style={{ height: '100%', overflow: 'hidden' }}>
+          {/* Zoom Controls */}
+          <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
+            <button
+              onClick={() => {
+                if (graphRef.current) {
+                  const currentDistance = cameraDistance
+                  const newDistance = Math.max(100, currentDistance - 50)
+                  setCameraDistance(newDistance)
+                  graphRef.current.cameraPosition({ x: 0, y: 0, z: newDistance })
+                }
+              }}
+              className="glass-panel border border-glass-border rounded-lg p-2 hover:bg-cyan-500/20 transition-colors"
+              title="Zoom In"
+            >
+              <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+            <button
+              onClick={() => {
+                if (graphRef.current) {
+                  const currentDistance = cameraDistance
+                  const newDistance = Math.min(2000, currentDistance + 50)
+                  setCameraDistance(newDistance)
+                  graphRef.current.cameraPosition({ x: 0, y: 0, z: newDistance })
+                }
+              }}
+              className="glass-panel border border-glass-border rounded-lg p-2 hover:bg-cyan-500/20 transition-colors"
+              title="Zoom Out"
+            >
+              <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+              </svg>
+            </button>
+          </div>
+          
           {/* Summary Statistics Overlay */}
           {displayNodes.length > 0 && (
             <div className="absolute top-4 left-4 glass-panel-strong rounded-lg p-4 z-10 min-w-[200px]">
@@ -435,12 +549,16 @@ export default function GraphExplorerPage() {
               width={graphDimensions.width}
               height={graphDimensions.height}
               nodeLabel={(node: any) => {
+                const isCenterNode = node.id === centerNodeId
+                const centerLabel = isCenterNode ? ' ⭐ CENTER' : ''
                 const riskText = node.riskScore ? ` (Risk: ${node.riskScore})` : ''
                 const degreeText = node.degree ? ` [${node.degree} connections]` : ''
-                return `${node.name}${riskText}${degreeText}`
+                return `${node.name}${centerLabel}${riskText}${degreeText}`
               }}
               nodeColor={(node: any) => {
-                const color = getNodeColorByType(node)
+                const isCenterNode = node.id === centerNodeId
+                // Center node is always bright cyan, others use their type-based color
+                const color = isCenterNode ? '#00FFFF' : getNodeColorByType(node)
                 const opacity = getNodeOpacity(
                   node.id,
                   nodeHopDistances,
@@ -448,11 +566,11 @@ export default function GraphExplorerPage() {
                   focusedNode?.id || null,
                   filters.focusMode
                 )
-                // Convert hex to rgba with opacity
+                // Convert hex to rgba with opacity (center node always full opacity)
                 const r = parseInt(color.slice(1, 3), 16)
                 const g = parseInt(color.slice(3, 5), 16)
                 const b = parseInt(color.slice(5, 7), 16)
-                return `rgba(${r}, ${g}, ${b}, ${opacity})`
+                return `rgba(${r}, ${g}, ${b}, ${isCenterNode ? 1.0 : opacity})`
               }}
               nodeVal={(node: any) => {
                 // Use locked size to prevent Framer Motion size jumps
@@ -461,23 +579,36 @@ export default function GraphExplorerPage() {
               }}
               linkLabel={(link: any) => (filters.showLabels ? link.type : '')}
               linkColor={(link: any) => {
-                const opacity = getLinkOpacity(
-                  link,
-                  focusedNode?.id || null,
-                  filters.focusMode
-                )
+                const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+                const targetId = typeof link.target === 'string' ? link.target : link.target.id
+                const isConnectedToCenter = centerNodeId && (sourceId === centerNodeId || targetId === centerNodeId)
+                
+                // Make links connected to center node bright cyan
+                if (isConnectedToCenter) {
+                  const opacity = getLinkOpacity(link, focusedNode?.id || null, filters.focusMode)
+                  return `rgba(0, 255, 255, ${Math.max(opacity, 0.9)})` // Bright cyan, minimum 90% opacity
+                }
+                
+                const opacity = getLinkOpacity(link, focusedNode?.id || null, filters.focusMode)
                 return `rgba(255, 255, 255, ${opacity})`
               }}
               linkWidth={(link: any) => {
+                const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+                const targetId = typeof link.target === 'string' ? link.target : link.target.id
+                const isConnectedToCenter = centerNodeId && (sourceId === centerNodeId || targetId === centerNodeId)
+                
+                // Make links to center node thicker
+                if (isConnectedToCenter) {
+                  return 4 // Thick cyan lines for center node connections
+                }
+                
                 // Make links to focused node thicker
                 if (filters.focusMode && focusedNode) {
-                  const sourceId = typeof link.source === 'string' ? link.source : link.source.id
-                  const targetId = typeof link.target === 'string' ? link.target : link.target.id
                   if (sourceId === focusedNode.id || targetId === focusedNode.id) {
                     return 2
                   }
                 }
-                return 1
+                return 1.5 // Slightly thicker default links
               }}
               linkDirectionalArrowLength={4}
               linkDirectionalArrowRelPos={1}
@@ -485,10 +616,146 @@ export default function GraphExplorerPage() {
               onNodeClick={handleNodeClick}
               backgroundColor="#030712"
               showNavInfo={true}
+              // Prevent center node from being dragged too far
+              onNodeDrag={(node: any) => {
+                // Allow center node to move slightly but pull it back
+                if (centerNodeId && node.id === centerNodeId) {
+                  const dist = Math.sqrt(node.x ** 2 + node.y ** 2 + node.z ** 2)
+                  if (dist > 50) {
+                    // If dragged too far, reset to origin
+                    node.fx = 0
+                    node.fy = 0
+                    node.fz = 0
+                  } else {
+                    // Allow small movements
+                    node.fx = undefined
+                    node.fy = undefined
+                    node.fz = undefined
+                  }
+                }
+              }}
+              // Customize force simulation for radial layout
+              d3Force={(d3: any) => {
+                // Center node attraction - gently pull center node back to origin
+                if (centerNodeId) {
+                  d3.force('centerNode', (alpha: number) => {
+                    displayNodes.forEach((node: any) => {
+                      if (node.id === centerNodeId) {
+                        // Strong attraction to origin
+                        const dist = Math.sqrt(node.x ** 2 + node.y ** 2 + node.z ** 2)
+                        if (dist > 1) {
+                          const force = -dist * alpha * 0.5
+                          node.vx += (node.x / dist) * force
+                          node.vy += (node.y / dist) * force
+                          node.vz += (node.z / dist) * force
+                        }
+                      }
+                    })
+                  })
+                }
+                
+                // Strong attraction force for nodes connected to center node
+                if (centerNodeId) {
+                  d3.force('centerAttraction', (alpha: number) => {
+                    const centerNode = displayNodes.find((n: any) => n.id === centerNodeId)
+                    if (!centerNode) return
+                    
+                    displayNodes.forEach((node: any) => {
+                      if (node.id === centerNodeId) return
+                      
+                      // Check if this node is connected to center
+                      const isConnected = displayLinks.some((link: any) => {
+                        const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+                        const targetId = typeof link.target === 'string' ? link.target : link.target.id
+                        return (sourceId === centerNodeId && targetId === node.id) ||
+                               (targetId === centerNodeId && sourceId === node.id)
+                      })
+                      
+                      if (isConnected) {
+                        // Calculate vector from center to this node
+                        const dx = node.x - centerNode.x
+                        const dy = node.y - centerNode.y
+                        const dz = node.z - centerNode.z
+                        const dist = Math.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
+                        
+                        if (dist > 0.1) {
+                          // Target distance for direct connections
+                          const targetDist = 60
+                          const force = (targetDist - dist) * alpha * 0.3
+                          
+                          node.vx += (dx / dist) * force
+                          node.vy += (dy / dist) * force
+                          node.vz += (dz / dist) * force
+                        }
+                      }
+                    })
+                  })
+                }
+                
+                // Reduce repulsion to keep nodes closer together
+                const charge = d3.force('charge')
+                if (charge) {
+                  charge.strength(-15) // Reduced repulsion
+                }
+                
+                // Strong link force to pull connected nodes together
+                const link = d3.force('link')
+                if (link) {
+                  link.strength((link: any) => {
+                    const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+                    const targetId = typeof link.target === 'string' ? link.target : link.target.id
+                    const isConnectedToCenter = centerNodeId && (sourceId === centerNodeId || targetId === centerNodeId)
+                    // Very strong links for center node connections
+                    return isConnectedToCenter ? 1.2 : 0.6
+                  })
+                  link.distance((link: any) => {
+                    const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+                    const targetId = typeof link.target === 'string' ? link.target : link.target.id
+                    const isConnectedToCenter = centerNodeId && (sourceId === centerNodeId || targetId === centerNodeId)
+                    // Short distance for center node connections
+                    return isConnectedToCenter ? 60 : 100
+                  })
+                }
+              }}
+              cooldownTicks={200}
+              onEngineTick={() => {
+                // Log progress during simulation
+                if (centerNodeId && displayNodes.length > 0) {
+                  const centerNode = displayNodes.find((n: any) => n.id === centerNodeId)
+                  if (centerNode) {
+                    // Count nodes connected to center
+                    const connectedNodes = displayLinks.filter((link: any) => {
+                      const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+                      const targetId = typeof link.target === 'string' ? link.target : link.target.id
+                      return sourceId === centerNodeId || targetId === centerNodeId
+                    }).length
+                    
+                    // Log first few ticks to debug
+                    if (Math.random() < 0.01) { // Log ~1% of ticks
+                      console.log('Force simulation:', {
+                        centerNodePos: { x: centerNode.x, y: centerNode.y, z: centerNode.z },
+                        connectedNodes,
+                        totalLinks: displayLinks.length,
+                      })
+                    }
+                  }
+                }
+              }}
               onEngineStop={() => {
                 console.log('Graph engine stopped, nodes:', displayNodes.length, 'links:', displayLinks.length)
-                if (graphRef.current) {
-                  // Zoom to fit
+                if (graphRef.current && centerNodeId) {
+                  // Center camera on the center node - only on initial load
+                  const centerNode = displayNodes.find((n: any) => n.id === centerNodeId)
+                  if (centerNode) {
+                    console.log('Center node final position:', { x: centerNode.x, y: centerNode.y, z: centerNode.z })
+                    // Only set initial camera position if not already set by user
+                    if (cameraDistance === 400) {
+                      graphRef.current.cameraPosition({ x: 0, y: 0, z: cameraDistance })
+                      graphRef.current.zoomToFit(cameraDistance, 20)
+                    }
+                  }
+                } else if (graphRef.current && displayNodes.length > 0 && cameraDistance === 400) {
+                  // Only auto-zoom if camera hasn't been manually adjusted
                   graphRef.current.zoomToFit(400)
                 }
               }}
@@ -522,9 +789,16 @@ export default function GraphExplorerPage() {
                 }
                 
                 const THREE = (window as any).THREE
-                const color = getNodeColorByType(node)
+                const isCenterNode = node.id === centerNodeId
+                const color = isCenterNode ? '#00FFFF' : getNodeColorByType(node) // Bright cyan for center node
                 const lockedSize = nodeSizes.get(node.id)
-                const size = getNodeSizeByImportance(node, lockedSize)
+                let size = getNodeSizeByImportance(node, lockedSize)
+                
+                // Make center node significantly larger
+                if (isCenterNode) {
+                  size = size * 2.5
+                }
+                
                 const opacity = getNodeOpacity(
                   node.id,
                   nodeHopDistances,
@@ -538,13 +812,39 @@ export default function GraphExplorerPage() {
                 const material = new THREE.MeshPhongMaterial({
                   color,
                   transparent: true,
-                  opacity: opacity * 0.9, // Apply visual hierarchy opacity
+                  opacity: isCenterNode ? 1.0 : opacity * 0.9, // Full opacity for center node
                   emissive: color,
-                  emissiveIntensity: node.id === centerNodeId ? 0.5 : 0.3, // Center node glows more
+                  emissiveIntensity: isCenterNode ? 1.2 : 0.3, // Very bright glow for center node
                 })
                 const sphere = new THREE.Mesh(geometry, material)
                 
-                // Add glow effect for high-risk nodes
+                // Special treatment for center node: add pulsing outer glow
+                if (isCenterNode) {
+                  const outerGlowGeometry = new THREE.SphereGeometry(size / 7, 16, 16)
+                  const outerGlowMaterial = new THREE.MeshBasicMaterial({
+                    color: '#00FFFF',
+                    transparent: true,
+                    opacity: 0.3,
+                  })
+                  const outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial)
+                  
+                  // Animate pulse for center node
+                  const animate = () => {
+                    const time = Date.now() * 0.001
+                    const scale = 1 + Math.sin(time * 3) * 0.15
+                    outerGlow.scale.set(scale, scale, scale)
+                    outerGlowMaterial.opacity = 0.3 + Math.sin(time * 3) * 0.2
+                    requestAnimationFrame(animate)
+                  }
+                  animate()
+                  
+                  const group = new THREE.Group()
+                  group.add(outerGlow)
+                  group.add(sphere)
+                  return group
+                }
+                
+                // Add glow effect for high-risk nodes (non-center)
                 if (node.riskScore !== undefined && node.riskScore >= 80) {
                   const glowGeometry = new THREE.SphereGeometry(size / 8, 16, 16)
                   const glowMaterial = new THREE.MeshBasicMaterial({
@@ -570,21 +870,6 @@ export default function GraphExplorerPage() {
                 }
                 
                 return sphere
-              }}
-              linkThreeObject={(link: any) => {
-                if (!(window as any).THREE) {
-                  return null
-                }
-                
-                const THREE = (window as any).THREE
-                // Create curved line for relationships
-                const geometry = new THREE.BufferGeometry()
-                const material = new THREE.LineBasicMaterial({
-                  color: 0xffffff,
-                  transparent: true,
-                  opacity: 0.3,
-                })
-                return new THREE.Line(geometry, material)
               }}
             />
           )}

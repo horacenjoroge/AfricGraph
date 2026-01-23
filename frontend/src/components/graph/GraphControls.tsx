@@ -2,7 +2,6 @@ import { useState } from 'react'
 
 interface GraphControlsProps {
   onFilterChange: (filters: GraphFilters) => void
-  onExport: () => void
   onLoadSubgraph: (nodeId: string, maxHops: number) => void
   availableRelationshipTypes?: string[]
 }
@@ -18,7 +17,7 @@ export interface GraphFilters {
   focusMode: boolean // Focus on selected node only
 }
 
-export default function GraphControls({ onFilterChange, onExport, onLoadSubgraph, availableRelationshipTypes = [] }: GraphControlsProps) {
+export default function GraphControls({ onFilterChange, onLoadSubgraph, availableRelationshipTypes = [] }: GraphControlsProps) {
   const [filters, setFilters] = useState<GraphFilters>({
     nodeTypes: [],
     riskLevel: 'all',
@@ -221,15 +220,6 @@ export default function GraphControls({ onFilterChange, onExport, onLoadSubgraph
         </div>
       </div>
 
-      {/* Export Button */}
-      <div className="pt-4 border-t border-glass-border">
-        <button
-          onClick={onExport}
-          className="w-full px-4 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors"
-        >
-          Export as Image
-        </button>
-      </div>
     </div>
   )
 }

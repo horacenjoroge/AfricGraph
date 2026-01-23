@@ -129,18 +129,30 @@ export function filterGraph(
     filteredNodes = filteredNodes.filter(node => focusedNodeIds.has(node.id))
   }
 
-  // Filter by relationship types
-  if (filters.relationshipTypes.length > 0) {
-    filteredLinks = filteredLinks.filter((link) =>
-      filters.relationshipTypes.includes(link.type)
-    )
+  // Filter by node types - but ALWAYS include center node
+  // Do this BEFORE relationship filtering so we can find all connected nodes
+  if (filters.nodeTypes.length > 0) {
+    filteredNodes = filteredNodes.filter((node) => {
+      // Always include center node regardless of type filter
+      if (centerNodeId && node.id === centerNodeId) return true
+      return node.labels.some((label) => filters.nodeTypes.includes(label))
+    })
   }
 
-  // Filter by node types
-  if (filters.nodeTypes.length > 0) {
-    filteredNodes = filteredNodes.filter((node) =>
-      node.labels.some((label) => filters.nodeTypes.includes(label))
-    )
+  // Filter by relationship types - but keep ALL links connected to center node
+  if (filters.relationshipTypes.length > 0) {
+    filteredLinks = filteredLinks.filter((link) => {
+      const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+      const targetId = typeof link.target === 'string' ? link.target : link.target.id
+      
+      // Always include links connected to center node, regardless of relationship type filter
+      if (centerNodeId && (sourceId === centerNodeId || targetId === centerNodeId)) {
+        return true
+      }
+      
+      // For other links, apply the relationship type filter
+      return filters.relationshipTypes.includes(link.type)
+    })
   }
 
   // Filter by risk level
@@ -169,11 +181,55 @@ export function filterGraph(
     )
   })
 
-  // Filter links to only include connections between filtered nodes
+  // BEFORE filtering links by node membership, find all nodes connected to center from ORIGINAL links
+  // This ensures we include connected nodes even if they were filtered out by node type
   const nodeIds = new Set(filteredNodes.map((n) => n.id))
+  if (centerNodeId && nodeIds.has(centerNodeId)) {
+    // Check ORIGINAL links (before relationship type filtering) to find all nodes connected to center
+    const allCenterLinks = links.filter((link) => {
+      const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+      const targetId = typeof link.target === 'string' ? link.target : link.target.id
+      return sourceId === centerNodeId || targetId === centerNodeId
+    })
+    
+    // Find nodes connected to center that aren't in filtered nodes
+    const missingNodes = new Set<string>()
+    allCenterLinks.forEach(link => {
+      const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+      const targetId = typeof link.target === 'string' ? link.target : link.target.id
+      if (sourceId === centerNodeId && !nodeIds.has(targetId)) {
+        missingNodes.add(targetId)
+      } else if (targetId === centerNodeId && !nodeIds.has(sourceId)) {
+        missingNodes.add(sourceId)
+      }
+    })
+    
+    // Add missing nodes back to filtered nodes
+    if (missingNodes.size > 0) {
+      const allNodesMap = new Map(nodes.map(n => [n.id, n]))
+      missingNodes.forEach(nodeId => {
+        const node = allNodesMap.get(nodeId)
+        if (node && !filteredNodes.find(n => n.id === nodeId)) {
+          filteredNodes.push(node)
+          nodeIds.add(nodeId)
+        }
+      })
+    }
+  }
+  
+  // Now filter links to only include connections between filtered nodes
+  // BUT always include links connected to center node (even if target node was just added)
   filteredLinks = filteredLinks.filter((link) => {
     const sourceId = typeof link.source === 'string' ? link.source : link.source.id
     const targetId = typeof link.target === 'string' ? link.target : link.target.id
+    
+    // Always include links connected to center node
+    if (centerNodeId && (sourceId === centerNodeId || targetId === centerNodeId)) {
+      // Include the link if at least one end (center node) is in filtered nodes
+      return nodeIds.has(sourceId) || nodeIds.has(targetId)
+    }
+    
+    // For other links, both nodes must be in filtered nodes
     return nodeIds.has(sourceId) && nodeIds.has(targetId)
   })
 
@@ -276,9 +332,9 @@ export function getLinkOpacity(
     const sourceId = typeof link.source === 'string' ? link.source : link.source.id
     const targetId = typeof link.target === 'string' ? link.target : link.target.id
     if (sourceId === focusedNodeId || targetId === focusedNodeId) {
-      return 0.8 // Highlight connections to focused node
+      return 0.9 // Highlight connections to focused node
     }
     return 0.2 // Dim other connections
   }
-  return 0.4 // Default opacity
+  return 0.7 // Default opacity - increased for better visibility
 }

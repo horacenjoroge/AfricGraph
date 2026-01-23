@@ -139,18 +139,10 @@ export function filterGraph(
     })
   }
 
-  // Filter by relationship types - but keep ALL links connected to center node
+  // Filter by relationship types - apply filter to ALL links including center node connections
   if (filters.relationshipTypes.length > 0) {
     filteredLinks = filteredLinks.filter((link) => {
-      const sourceId = typeof link.source === 'string' ? link.source : link.source.id
-      const targetId = typeof link.target === 'string' ? link.target : link.target.id
-      
-      // Always include links connected to center node, regardless of relationship type filter
-      if (centerNodeId && (sourceId === centerNodeId || targetId === centerNodeId)) {
-        return true
-      }
-      
-      // For other links, apply the relationship type filter
+      // Apply relationship type filter to all links, including center node connections
       return filters.relationshipTypes.includes(link.type)
     })
   }
@@ -181,18 +173,25 @@ export function filterGraph(
     )
   })
 
-  // BEFORE filtering links by node membership, find all nodes connected to center from ORIGINAL links
-  // This ensures we include connected nodes even if they were filtered out by node type
+  // BEFORE filtering links by node membership, find nodes connected to center
+  // Only add back nodes that match the current filters (node type, risk level, relationship type, etc.)
   const nodeIds = new Set(filteredNodes.map((n) => n.id))
   if (centerNodeId && nodeIds.has(centerNodeId)) {
-    // Check ORIGINAL links (before relationship type filtering) to find all nodes connected to center
-    const allCenterLinks = links.filter((link) => {
+    // Check links that match relationship type filter (if set) to find nodes connected to center
+    let centerLinksToCheck = links
+    if (filters.relationshipTypes.length > 0) {
+      // Only check links that match the relationship type filter
+      centerLinksToCheck = links.filter(link => filters.relationshipTypes.includes(link.type))
+    }
+    
+    const allCenterLinks = centerLinksToCheck.filter((link) => {
       const sourceId = typeof link.source === 'string' ? link.source : link.source.id
       const targetId = typeof link.target === 'string' ? link.target : link.target.id
       return sourceId === centerNodeId || targetId === centerNodeId
     })
     
     // Find nodes connected to center that aren't in filtered nodes
+    // BUT only add them back if they match the node type filter (if one is set)
     const missingNodes = new Set<string>()
     allCenterLinks.forEach(link => {
       const sourceId = typeof link.source === 'string' ? link.source : link.source.id
@@ -204,14 +203,52 @@ export function filterGraph(
       }
     })
     
-    // Add missing nodes back to filtered nodes
+    // Add missing nodes back ONLY if they pass all current filters
     if (missingNodes.size > 0) {
       const allNodesMap = new Map(nodes.map(n => [n.id, n]))
       missingNodes.forEach(nodeId => {
         const node = allNodesMap.get(nodeId)
         if (node && !filteredNodes.find(n => n.id === nodeId)) {
-          filteredNodes.push(node)
-          nodeIds.add(nodeId)
+          // Check node type filter
+          let passesNodeType = true
+          if (filters.nodeTypes.length > 0) {
+            passesNodeType = node.labels.some((label) => filters.nodeTypes.includes(label))
+          }
+          
+          // Check risk level filter
+          let passesRiskLevel = true
+          if (filters.riskLevel !== 'all') {
+            if (node.riskScore === undefined) {
+              passesRiskLevel = false
+            } else {
+              switch (filters.riskLevel) {
+                case 'high':
+                  passesRiskLevel = node.riskScore >= 80
+                  break
+                case 'medium':
+                  passesRiskLevel = node.riskScore >= 60 && node.riskScore < 80
+                  break
+                case 'low':
+                  passesRiskLevel = node.riskScore < 60
+                  break
+              }
+            }
+          }
+          
+          // Check risk score range filter
+          let passesRiskRange = true
+          if (node.riskScore !== undefined) {
+            passesRiskRange = (
+              node.riskScore >= filters.minRiskScore &&
+              node.riskScore <= filters.maxRiskScore
+            )
+          }
+          
+          // Only add back if node passes all filters
+          if (passesNodeType && passesRiskLevel && passesRiskRange) {
+            filteredNodes.push(node)
+            nodeIds.add(nodeId)
+          }
         }
       })
     }

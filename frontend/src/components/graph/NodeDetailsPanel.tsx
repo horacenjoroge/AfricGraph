@@ -32,9 +32,10 @@ interface NodeDetailsPanelProps {
   node: Node | null
   onClose: () => void
   onLoadNeighbors?: (nodeId: string) => void
+  onShowConnections?: () => void
 }
 
-export default function NodeDetailsPanel({ node, onClose, onLoadNeighbors }: NodeDetailsPanelProps) {
+export default function NodeDetailsPanel({ node, onClose, onLoadNeighbors, onShowConnections }: NodeDetailsPanelProps) {
   const [details, setDetails] = useState<{ owners: Owner[]; connections: Connection[] } | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
 
@@ -255,6 +256,14 @@ export default function NodeDetailsPanel({ node, onClose, onLoadNeighbors }: Nod
 
         {/* Actions */}
         <div className="pt-4 border-t border-glass-border space-y-2">
+          {onShowConnections && (
+            <button
+              onClick={onShowConnections}
+              className="w-full px-4 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors text-sm"
+            >
+              View All Connections
+            </button>
+          )}
           {onLoadNeighbors && (
             <button
               onClick={() => onLoadNeighbors(node.id)}

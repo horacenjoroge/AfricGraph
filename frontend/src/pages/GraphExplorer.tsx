@@ -3,6 +3,7 @@ import ForceGraph3D from 'react-force-graph-3d'
 import axios from 'axios'
 import GraphControls, { GraphFilters } from '../components/graph/GraphControls'
 import NodeDetailsPanel from '../components/graph/NodeDetailsPanel'
+import ConnectionsDiagram from '../components/graph/ConnectionsDiagram'
 import HowItWorks from '../components/HowItWorks'
 import GraphLegend from '../components/graph/GraphLegend'
 import {
@@ -14,7 +15,7 @@ import {
   getNodeOpacity,
   getLinkOpacity,
 } from '../utils/graphUtils'
-import { exportGraphAsImage, exportGraphAsJSON } from '../utils/exportGraph'
+import { exportConnectionsAsPDF, exportConnectionsAsDOCX } from '../utils/exportDocument'
 
 interface Node {
   id: string
@@ -39,6 +40,8 @@ export default function GraphExplorerPage() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [focusedNode, setFocusedNode] = useState<Node | null>(null)
   const [loading, setLoading] = useState(false)
+  const [showConnectionsDiagram, setShowConnectionsDiagram] = useState(false)
+  const [nodeConnections, setNodeConnections] = useState<any[]>([])
   const [centerNodeId, setCenterNodeId] = useState<string | null>(null)
   const [nodeHopDistances, setNodeHopDistances] = useState<Map<string, number>>(new Map())
   const [nodeSizes, setNodeSizes] = useState<Map<string, number>>(new Map())
@@ -274,7 +277,7 @@ export default function GraphExplorerPage() {
         // Handle null riskScore values
         const riskScore = n.riskScore ?? n.properties?.risk_score ?? n.properties?.riskScore
         return {
-          id: String(n.id),
+        id: String(n.id),
           name: n.label || n.properties?.name || n.id,
           labels: Array.isArray(n.labels) ? n.labels : (n.labels ? [n.labels] : []),
           riskScore: riskScore !== null && riskScore !== undefined ? Number(riskScore) : undefined,
@@ -356,23 +359,6 @@ export default function GraphExplorerPage() {
 
   const graphContainerRef = useRef<HTMLDivElement>(null)
 
-  const exportGraph = useCallback(async () => {
-    try {
-      if (graphContainerRef.current) {
-        await exportGraphAsImage(graphContainerRef.current)
-      } else {
-        // Fallback: export as JSON
-        exportGraphAsJSON(displayNodes, displayLinks)
-        alert('Graph exported as JSON. Image export requires graph container reference.')
-      }
-    } catch (error) {
-      console.error('Export failed:', error)
-      // Fallback to JSON export
-      exportGraphAsJSON(displayNodes, displayLinks)
-      alert('Image export failed. Graph data exported as JSON instead.')
-    }
-  }, [displayNodes, displayLinks])
-
   const handleNodeClick = useCallback((node: any) => {
     setSelectedNode(node)
     // Toggle focus mode on click if enabled
@@ -389,6 +375,35 @@ export default function GraphExplorerPage() {
     loadSubgraph(nodeId, 1)
     setSelectedNode(null)
   }, [])
+
+  const handleShowConnections = useCallback(async (node: Node) => {
+    try {
+      setLoading(true)
+      const response = await axios.get(`/api/v1/graph/node/${node.id}/details`)
+      setNodeConnections(response.data.connections || [])
+      setShowConnectionsDiagram(true)
+    } catch (error) {
+      console.error('Failed to load connections:', error)
+      alert('Failed to load connections. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const handleExportConnections = useCallback(async (format: 'pdf' | 'docx') => {
+    if (!selectedNode) return
+    
+    try {
+      if (format === 'pdf') {
+        await exportConnectionsAsPDF(selectedNode, nodeConnections)
+      } else {
+        await exportConnectionsAsDOCX(selectedNode, nodeConnections)
+      }
+    } catch (error) {
+      console.error('Export failed:', error)
+      alert(`Failed to export as ${format.toUpperCase()}. Please try again.`)
+    }
+  }, [selectedNode, nodeConnections])
 
   // Memoize graph data to prevent unnecessary re-renders
   const graphData = useMemo(() => ({
@@ -420,7 +435,6 @@ export default function GraphExplorerPage() {
                 setFocusedNode(null)
               }
             }}
-            onExport={exportGraph}
             onLoadSubgraph={loadSubgraph}
             availableRelationshipTypes={availableRelationshipTypes}
           />
@@ -550,7 +564,7 @@ export default function GraphExplorerPage() {
               height={graphDimensions.height}
               nodeLabel={(node: any) => {
                 const isCenterNode = node.id === centerNodeId
-                const centerLabel = isCenterNode ? ' ⭐ CENTER' : ''
+                const centerLabel = isCenterNode ? ' [CENTER]' : ''
                 const riskText = node.riskScore ? ` (Risk: ${node.riskScore})` : ''
                 const degreeText = node.degree ? ` [${node.degree} connections]` : ''
                 return `${node.name}${centerLabel}${riskText}${degreeText}`
@@ -879,7 +893,18 @@ export default function GraphExplorerPage() {
             node={selectedNode}
             onClose={() => setSelectedNode(null)}
             onLoadNeighbors={handleLoadNeighbors}
+            onShowConnections={selectedNode ? () => handleShowConnections(selectedNode) : undefined}
           />
+
+          {/* Connections Diagram Modal */}
+          {showConnectionsDiagram && selectedNode && (
+            <ConnectionsDiagram
+              node={selectedNode}
+              connections={nodeConnections}
+              onClose={() => setShowConnectionsDiagram(false)}
+              onExport={handleExportConnections}
+            />
+          )}
         </div>
       </div>
     </div>

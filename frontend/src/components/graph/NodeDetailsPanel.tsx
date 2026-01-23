@@ -1,4 +1,6 @@
 import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import axios from 'axios'
 
 interface Node {
   id: string
@@ -9,6 +11,23 @@ interface Node {
   properties?: Record<string, any>
 }
 
+interface Owner {
+  id: string
+  name: string
+  labels: string[]
+  properties?: Record<string, any>
+  ownership_percentage?: number
+}
+
+interface Connection {
+  id: string
+  name: string
+  labels: string[]
+  properties?: Record<string, any>
+  relationship_type: string
+  relationship_properties?: Record<string, any>
+}
+
 interface NodeDetailsPanelProps {
   node: Node | null
   onClose: () => void
@@ -16,6 +35,32 @@ interface NodeDetailsPanelProps {
 }
 
 export default function NodeDetailsPanel({ node, onClose, onLoadNeighbors }: NodeDetailsPanelProps) {
+  const [details, setDetails] = useState<{ owners: Owner[]; connections: Connection[] } | null>(null)
+  const [loadingDetails, setLoadingDetails] = useState(false)
+
+  useEffect(() => {
+    if (node) {
+      setLoadingDetails(true)
+      axios
+        .get(`/api/v1/graph/node/${node.id}/details`)
+        .then((response) => {
+          setDetails({
+            owners: response.data.owners || [],
+            connections: response.data.connections || [],
+          })
+        })
+        .catch((error) => {
+          console.error('Failed to load node details:', error)
+          setDetails({ owners: [], connections: [] })
+        })
+        .finally(() => {
+          setLoadingDetails(false)
+        })
+    } else {
+      setDetails(null)
+    }
+  }, [node])
+
   if (!node) return null
 
   return (
@@ -107,6 +152,89 @@ export default function NodeDetailsPanel({ node, onClose, onLoadNeighbors }: Nod
             </div>
           </div>
         )}
+
+        {/* Owners */}
+        {node.labels.includes('Business') && (
+          <div>
+            <h4 className="text-sm font-medium text-gray-400 mb-2">
+              Owners ({loadingDetails ? '...' : details?.owners.length || 0})
+            </h4>
+            {loadingDetails ? (
+              <div className="text-xs text-gray-500">Loading owners...</div>
+            ) : details && details.owners.length > 0 ? (
+              <div className="space-y-2 text-sm">
+                {details.owners.map((owner) => (
+                  <div
+                    key={owner.id}
+                    className="p-2 bg-blue-500/10 rounded border border-blue-500/20"
+                  >
+                    <div className="font-medium">{owner.name || owner.id}</div>
+                    {owner.ownership_percentage !== null && owner.ownership_percentage !== undefined && (
+                      <div className="text-xs text-gray-400">
+                        Ownership: {owner.ownership_percentage}%
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {owner.labels.map((label) => (
+                        <span
+                          key={label}
+                          className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs"
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-gray-500">No owners found</div>
+            )}
+          </div>
+        )}
+
+        {/* Connections */}
+        <div>
+          <h4 className="text-sm font-medium text-gray-400 mb-2">
+            Connections ({loadingDetails ? '...' : details?.connections.length || 0})
+          </h4>
+          {loadingDetails ? (
+            <div className="text-xs text-gray-500">Loading connections...</div>
+          ) : details && details.connections.length > 0 ? (
+            <div className="space-y-2 text-sm max-h-48 overflow-y-auto">
+              {details.connections.slice(0, 10).map((conn) => (
+                <div
+                  key={conn.id}
+                  className="p-2 bg-green-500/10 rounded border border-green-500/20"
+                >
+                  <div className="font-medium">{conn.name || conn.id}</div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    <span className="px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded">
+                      {conn.relationship_type}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {conn.labels.map((label) => (
+                      <span
+                        key={label}
+                        className="px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded text-xs"
+                      >
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {details.connections.length > 10 && (
+                <div className="text-xs text-gray-500 text-center">
+                  +{details.connections.length - 10} more connections
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-xs text-gray-500">No connections found</div>
+          )}
+        </div>
 
         {/* Properties */}
         {node.properties && Object.keys(node.properties).length > 0 && (

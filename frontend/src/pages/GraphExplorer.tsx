@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import ForceGraph3D from 'react-force-graph-3d'
 import axios from 'axios'
 import GraphControls, { GraphFilters } from '../components/graph/GraphControls'
@@ -42,20 +42,78 @@ export default function GraphExplorerPage() {
     showLabels: true,
   })
   const graphRef = useRef<any>()
+  const [graphDimensions, setGraphDimensions] = useState({ width: 800, height: 600 })
 
   useEffect(() => {
     loadGraphData()
   }, [])
 
+  // Update graph dimensions when container resizes
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (graphContainerRef.current) {
+        setGraphDimensions({
+          width: graphContainerRef.current.clientWidth,
+          height: graphContainerRef.current.clientHeight,
+        })
+      }
+    }
+
+    updateDimensions()
+    window.addEventListener('resize', updateDimensions)
+    return () => window.removeEventListener('resize', updateDimensions)
+  }, [])
+
   useEffect(() => {
     // Recalculate degrees when nodes/links change
+    if (allNodes.length === 0 && allLinks.length === 0) {
+      setDisplayNodes([])
+      setDisplayLinks([])
+      return
+    }
+
+    console.log('Recalculating graph display:', {
+      nodeCount: allNodes.length,
+      linkCount: allLinks.length,
+      filters,
+    })
+
     const nodesWithDegrees = calculateNodeDegrees(allNodes, allLinks)
-    setAllNodes(nodesWithDegrees)
+    console.log('Nodes with degrees:', nodesWithDegrees.length)
 
     // Apply filters
     const filtered = filterGraph(nodesWithDegrees, allLinks, filters)
+    console.log('Filtered result:', {
+      nodeCount: filtered.nodes.length,
+      linkCount: filtered.links.length,
+    })
+    
+    // Create a node map for link resolution
+    const nodeMap = new Map(filtered.nodes.map(n => [n.id, n]))
+    
+    // Convert link source/target from IDs to node objects for react-force-graph-3d
+    const resolvedLinks = filtered.links.map(link => {
+      const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+      const targetId = typeof link.target === 'string' ? link.target : link.target.id
+      const sourceNode = nodeMap.get(sourceId)
+      const targetNode = nodeMap.get(targetId)
+      
+      if (!sourceNode || !targetNode) {
+        console.warn('Link references missing node:', { sourceId, targetId, link })
+        return null
+      }
+      
+      return {
+        ...link,
+        source: sourceNode,
+        target: targetNode,
+      }
+    }).filter((link): link is Link => link !== null)
+    
+    console.log('Resolved links:', resolvedLinks.length)
+    
     setDisplayNodes(filtered.nodes)
-    setDisplayLinks(filtered.links)
+    setDisplayLinks(resolvedLinks)
   }, [allNodes, allLinks, filters])
 
   const loadGraphData = async () => {
@@ -91,27 +149,48 @@ export default function GraphExplorerPage() {
     setLoading(true)
     try {
       const response = await axios.get(`/api/v1/graph/subgraph/${nodeId}`, {
-        params: { max_hops: maxHops, format: 'json' },
+        params: { max_hops: maxHops, format: 'visualization' },
       })
       
       const subgraph = response.data
-      const nodes: Node[] = subgraph.nodes.map((n: any) => ({
-        id: String(n.id),
-        name: n.properties?.name || n.id,
-        labels: n.labels || [],
-        properties: n.properties,
+      console.log('Subgraph response:', subgraph)
+      
+      // Visualization format returns 'edges' not 'relationships'
+      const edges = subgraph.edges || subgraph.relationships || []
+      
+      const nodes: Node[] = (subgraph.nodes || []).map((n: any) => {
+        // Handle null riskScore values
+        const riskScore = n.riskScore ?? n.properties?.risk_score ?? n.properties?.riskScore
+        return {
+          id: String(n.id),
+          name: n.label || n.properties?.name || n.id,
+          labels: Array.isArray(n.labels) ? n.labels : (n.labels ? [n.labels] : []),
+          riskScore: riskScore !== null && riskScore !== undefined ? Number(riskScore) : undefined,
+          properties: n.properties || {},
+        }
+      })
+      
+      const links: Link[] = edges.map((r: any) => ({
+        source: String(r.source || r.from_id),
+        target: String(r.target || r.to_id),
+        type: r.type || '',
       }))
       
-      const links: Link[] = subgraph.relationships.map((r: any) => ({
-        source: r.from_id,
-        target: r.to_id,
-        type: r.type,
-      }))
+      console.log('Transformed nodes:', nodes)
+      console.log('Transformed links:', links)
+      console.log('Node count:', nodes.length, 'Link count:', links.length)
       
+      if (nodes.length === 0) {
+        console.warn('No nodes found in subgraph response')
+        console.warn('Raw subgraph data:', JSON.stringify(subgraph, null, 2))
+      }
+      
+      // Set nodes and links - this will trigger the useEffect to recalculate degrees and apply filters
       setAllNodes(nodes)
       setAllLinks(links)
     } catch (error: any) {
       console.error('Failed to load subgraph:', error)
+      console.error('Error details:', error.response?.data || error.message)
       // Error notification will be handled by the notification system if needed
       loadGraphData()
     } finally {
@@ -147,6 +226,12 @@ export default function GraphExplorerPage() {
     setSelectedNode(null)
   }, [])
 
+  // Memoize graph data to prevent unnecessary re-renders
+  const graphData = useMemo(() => ({
+    nodes: displayNodes,
+    links: displayLinks,
+  }), [displayNodes, displayLinks])
+
   return (
     <div className="h-screen flex flex-col bg-deep-space">
       <div className="px-6 py-4 border-b border-glass-border glass-panel">
@@ -178,10 +263,32 @@ export default function GraphExplorerPage() {
                 <div>Loading graph...</div>
               </div>
             </div>
+          ) : displayNodes.length === 0 && allNodes.length === 0 ? (
+            <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+              <div className="text-center">
+                <div className="text-lg mb-2">No graph data available</div>
+                <div className="text-sm">Load a subgraph by entering a Node ID above</div>
+                {allNodes.length > 0 && (
+                  <div className="text-xs mt-2 text-yellow-400">
+                    Data loaded but filtered out. Check your filter settings.
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : displayNodes.length === 0 && allNodes.length > 0 ? (
+            <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+              <div className="text-center">
+                <div className="text-lg mb-2">All nodes filtered out</div>
+                <div className="text-sm">Adjust your filter settings to see nodes</div>
+                <div className="text-xs mt-2">Total nodes: {allNodes.length}</div>
+              </div>
+            </div>
           ) : (
             <ForceGraph3D
               ref={graphRef}
-              graphData={{ nodes: displayNodes, links: displayLinks }}
+              graphData={graphData}
+              width={graphDimensions.width}
+              height={graphDimensions.height}
               nodeLabel={(node: any) => {
                 const riskText = node.riskScore ? ` (Risk: ${node.riskScore})` : ''
                 const degreeText = node.degree ? ` [${node.degree} connections]` : ''
@@ -198,30 +305,66 @@ export default function GraphExplorerPage() {
               onNodeClick={handleNodeClick}
               backgroundColor="#030712"
               showNavInfo={true}
+              onEngineStop={() => {
+                console.log('Graph engine stopped, nodes:', displayNodes.length, 'links:', displayLinks.length)
+                if (graphRef.current) {
+                  // Zoom to fit
+                  graphRef.current.zoomToFit(400)
+                }
+              }}
+              onRenderFramePre={() => {
+                // Ensure lighting is set up
+                if (graphRef.current && (window as any).THREE) {
+                  const THREE = (window as any).THREE
+                  const scene = graphRef.current.scene()
+                  if (scene) {
+                    // Add ambient light if not present
+                    const lights = scene.children.filter((child: any) => child.type === 'AmbientLight')
+                    if (lights.length === 0) {
+                      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
+                      scene.add(ambientLight)
+                    }
+                    
+                    // Add directional light if not present
+                    const dirLights = scene.children.filter((child: any) => child.type === 'DirectionalLight')
+                    if (dirLights.length === 0) {
+                      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
+                      directionalLight.position.set(1, 1, 1)
+                      scene.add(directionalLight)
+                    }
+                  }
+                }
+              }}
               nodeThreeObject={(node: any) => {
+                if (!(window as any).THREE) {
+                  console.error('THREE.js not loaded')
+                  return null
+                }
+                
+                const THREE = (window as any).THREE
                 const color = getNodeColorByType(node)
                 const size = getNodeSizeByImportance(node)
                 
                 // Create glowing sphere
-                const geometry = new (window as any).THREE.SphereGeometry(size / 10, 16, 16)
-                const material = new (window as any).THREE.MeshPhongMaterial({
+                const geometry = new THREE.SphereGeometry(size / 10, 16, 16)
+                const material = new THREE.MeshPhongMaterial({
                   color,
                   transparent: true,
                   opacity: 0.9,
                   emissive: color,
                   emissiveIntensity: 0.3,
                 })
-                const sphere = new (window as any).THREE.Mesh(geometry, material)
+                const sphere = new THREE.Mesh(geometry, material)
                 
                 // Add glow effect for high-risk nodes
                 if (node.riskScore !== undefined && node.riskScore >= 80) {
-                  const glowGeometry = new (window as any).THREE.SphereGeometry(size / 8, 16, 16)
-                  const glowMaterial = new (window as any).THREE.MeshBasicMaterial({
+                  const glowGeometry = new THREE.SphereGeometry(size / 8, 16, 16)
+                  const glowMaterial = new THREE.MeshBasicMaterial({
                     color: '#EF4444',
                     transparent: true,
                     opacity: 0.2,
                   })
-                  const glow = new (window as any).THREE.Mesh(glowGeometry, glowMaterial)
+                  const glow = new THREE.Mesh(glowGeometry, glowMaterial)
                   
                   // Animate pulse
                   const animate = () => {
@@ -232,7 +375,7 @@ export default function GraphExplorerPage() {
                   }
                   animate()
                   
-                  const group = new (window as any).THREE.Group()
+                  const group = new THREE.Group()
                   group.add(glow)
                   group.add(sphere)
                   return group
@@ -241,14 +384,19 @@ export default function GraphExplorerPage() {
                 return sphere
               }}
               linkThreeObject={(link: any) => {
+                if (!(window as any).THREE) {
+                  return null
+                }
+                
+                const THREE = (window as any).THREE
                 // Create curved line for relationships
-                const geometry = new (window as any).THREE.BufferGeometry()
-                const material = new (window as any).THREE.LineBasicMaterial({
+                const geometry = new THREE.BufferGeometry()
+                const material = new THREE.LineBasicMaterial({
                   color: 0xffffff,
                   transparent: true,
                   opacity: 0.3,
                 })
-                return new (window as any).THREE.Line(geometry, material)
+                return new THREE.Line(geometry, material)
               }}
             />
           )}

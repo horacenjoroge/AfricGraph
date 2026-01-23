@@ -27,6 +27,10 @@ def serialize_value(value: Any) -> str:
     # Handle Pydantic models
     if hasattr(value, 'model_dump'):
         return json.dumps(value.model_dump(mode='json'), default=str)
+    # Handle dataclasses
+    from dataclasses import is_dataclass, asdict
+    if is_dataclass(value) and not isinstance(value, type):
+        return json.dumps(asdict(value), default=str)
     return json.dumps(value, default=str)
 
 

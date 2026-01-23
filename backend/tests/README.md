@@ -117,6 +117,61 @@ Common fixtures are defined in `conftest.py`:
 - `admin_subject`: Admin ABAC subject
 - `owner_subject`: Owner ABAC subject
 
+### Seed Data Fixtures
+
+The test suite includes fixtures that use the seed data script to populate the database:
+
+#### `seeded_test_data` (session-scoped)
+Comprehensive test data that runs once per test session. Creates:
+- 20 sample businesses (BIZ001-BIZ020)
+- 15 sample people (PERSON001-PERSON015)
+- Ownership, supplier, and director relationships
+- 50 business-to-business transactions
+- 200 mobile money transactions (M-Pesa & Airtel)
+- 100 invoices with payment relationships
+- Complex business scenarios (groups, shared directors)
+
+**Usage:**
+```python
+@pytest.mark.integration
+def test_with_seeded_data(seeded_test_data):
+    """Test using comprehensive seeded data."""
+    business_ids = seeded_test_data["business_ids"]
+    person_ids = seeded_test_data["person_ids"]
+    # Use the IDs in your test
+    assert len(business_ids) == 20
+```
+
+#### `minimal_test_data` (function-scoped)
+Creates fresh minimal data for each test:
+- 3 sample businesses
+- 2 sample people
+- Basic ownership relationships
+
+Automatically cleans up after each test.
+
+**Usage:**
+```python
+def test_with_fresh_data(minimal_test_data):
+    """Test with fresh data for each run."""
+    business_ids = minimal_test_data["business_ids"]
+    # Data is cleaned up automatically after test
+```
+
+#### Helper Fixtures
+- `sample_business_ids`: List of all seeded business IDs
+- `sample_person_ids`: List of all seeded person IDs
+- `sample_business_id`: Single business ID (first one)
+- `sample_person_id`: Single person ID (first one)
+
+**Usage:**
+```python
+def test_business_search(sample_business_id, test_client):
+    """Test searching for a seeded business."""
+    response = test_client.get(f"/api/v1/businesses/{sample_business_id}")
+    assert response.status_code == 200
+```
+
 ## Writing Tests
 
 ### Unit Test Example

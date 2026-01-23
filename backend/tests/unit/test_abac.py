@@ -18,12 +18,13 @@ class TestSubjectAttributes:
         subject = SubjectAttributes(
             user_id="user-1",
             role="admin",
-            business_ids=None,
-            permissions=["read", "write"],
+            business_ids=["business-123"],
+            clearance_level=3,
         )
         assert subject.user_id == "user-1"
         assert subject.role == "admin"
-        assert "read" in subject.permissions
+        assert "business-123" in subject.business_ids
+        assert subject.clearance_level == 3
 
 
 @pytest.mark.unit
@@ -34,14 +35,15 @@ class TestResourceAttributes:
     def test_resource_attributes_creation(self):
         """Test creating ResourceAttributes."""
         resource = ResourceAttributes(
-            resource_resource_type="Business",
-            id=["business-123"],
+            resource_type="Business",
+            resource_id="business-123",
             owner_id="owner-1",
-            sensitivity_level="public",
+            sensitivity_level=0,  # 0 = public
         )
-        assert resource.type == "Business"
-        assert resource.id == ["business-123"]
+        assert resource.resource_type == "Business"
+        assert resource.resource_id == "business-123"
         assert resource.owner_id == "owner-1"
+        assert resource.sensitivity_level == 0
 
 
 @pytest.mark.unit
@@ -56,7 +58,8 @@ class TestEnvironmentAttributes:
         
         env = EnvironmentAttributes.from_request(mock_request)
         assert env.ip_address == "192.168.1.1"
-        assert env.time is not None
+        assert env.hour is not None
+        assert env.day_of_week is not None
 
 
 @pytest.mark.unit
@@ -67,100 +70,105 @@ class TestABACEngine:
     def test_admin_authorization(self, admin_subject):
         """Test admin can access everything."""
         engine = AbacEngine()
-        resource = ResourceAttributes(resource_resource_type="Business", id=["business-123"])
-        environment = EnvironmentAttributes()
+        resource = ResourceAttributes(resource_type="Business", resource_id="business-123")
+        environment = EnvironmentAttributes.default()
         
         decision = engine.authorize(
-            subject=admin_subject,
             action=Action.READ,
+            subject=admin_subject,
             resource=resource,
-            environment=environment,
+            env=environment,
         )
-        assert decision.authorized is True
+        assert decision.allowed is True
 
     def test_owner_authorization_own_business(self, owner_subject):
         """Test owner can access their own business."""
         engine = AbacEngine()
         resource = ResourceAttributes(
-            resource_resource_type="Business",
-            id=["business-123"],
+            resource_type="Business",
+            resource_id="business-123",
             owner_id="owner-1",
         )
-        environment = EnvironmentAttributes()
+        environment = EnvironmentAttributes.default()
         
         decision = engine.authorize(
-            subject=owner_subject,
             action=Action.READ,
+            subject=owner_subject,
             resource=resource,
-            environment=environment,
+            env=environment,
         )
-        assert decision.authorized is True
+        assert decision.allowed is True
 
     def test_owner_authorization_other_business(self, owner_subject):
         """Test owner cannot access other businesses."""
         engine = AbacEngine()
         resource = ResourceAttributes(
-            resource_resource_type="Business",
-            id="business-456",
+            resource_type="Business",
+            resource_id="business-456",
             owner_id="owner-2",
         )
-        environment = EnvironmentAttributes()
+        environment = EnvironmentAttributes.default()
         
         decision = engine.authorize(
-            subject=owner_subject,
             action=Action.READ,
+            subject=owner_subject,
             resource=resource,
-            environment=environment,
+            env=environment,
         )
-        assert decision.authorized is False
+        assert decision.allowed is False
 
     def test_analyst_read_access(self, analyst_subject):
         """Test analyst can read non-sensitive data."""
         engine = AbacEngine()
         resource = ResourceAttributes(
-            resource_resource_type="Business",
-            id=["business-123"],
-            sensitivity_level="public",
+            resource_type="Business",
+            resource_id="business-123",
+            sensitivity_level=0,  # public
         )
-        environment = EnvironmentAttributes()
+        environment = EnvironmentAttributes.default()
         
         decision = engine.authorize(
-            subject=analyst_subject,
             action=Action.READ,
+            subject=analyst_subject,
             resource=resource,
-            environment=environment,
+            env=environment,
         )
-        assert decision.authorized is True
+        assert decision.allowed is True
 
     def test_analyst_write_denied(self, analyst_subject):
         """Test analyst cannot write."""
         engine = AbacEngine()
-        resource = ResourceAttributes(resource_resource_type="Business", id=["business-123"])
-        environment = EnvironmentAttributes()
+        resource = ResourceAttributes(resource_type="Business", resource_id="business-123")
+        environment = EnvironmentAttributes.default()
         
         decision = engine.authorize(
-            subject=analyst_subject,
             action=Action.WRITE,
+            subject=analyst_subject,
             resource=resource,
-            environment=environment,
+            env=environment,
         )
-        assert decision.authorized is False
+        assert decision.allowed is False
 
     def test_time_based_restriction(self, admin_subject):
         """Test time-based access restrictions."""
         engine = AbacEngine()
-        resource = ResourceAttributes(resource_resource_type="Business", id=["business-123"])
+        resource = ResourceAttributes(resource_type="Business", resource_id="business-123")
         
         # Outside business hours
+        from zoneinfo import ZoneInfo
+        now = datetime.now(ZoneInfo("UTC")).replace(hour=22, minute=0)
         env = EnvironmentAttributes(
-            time=datetime.now().replace(hour=22, minute=0),
+            ip_address="",
+            timezone="UTC",
+            hour=now.hour,
+            day_of_week=now.weekday(),
         )
         
         decision = engine.authorize(
-            subject=admin_subject,
             action=Action.WRITE,
+            subject=admin_subject,
             resource=resource,
-            environment=env,
+            env=env,
         )
         # Should still allow (admin override) but log restriction
-        assert decision.authorized is True
+        assert decision.allowed is True

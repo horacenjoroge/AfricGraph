@@ -1,7 +1,7 @@
 """Pytest configuration and shared fixtures."""
 import pytest
 import os
-from typing import Generator
+from typing import Generator, List, Dict, Any
 from unittest.mock import Mock, patch
 
 # Set test environment variables
@@ -115,8 +115,8 @@ def admin_subject():
     return SubjectAttributes(
         user_id="admin-1",
         role="admin",
-        business_ids=None,
-        permissions=["*"],
+        business_ids=[],
+        clearance_level=3,  # Highest clearance
     )
 
 
@@ -129,7 +129,8 @@ def owner_subject():
         user_id="owner-1",
         role="owner",
         business_ids=["business-123"],
-        permissions=["read", "write"],
+        owner_ids=["owner-1"],
+        clearance_level=2,
     )
 
 
@@ -141,8 +142,8 @@ def analyst_subject():
     return SubjectAttributes(
         user_id="analyst-1",
         role="analyst",
-        business_ids=None,
-        permissions=["read"],
+        business_ids=[],
+        clearance_level=1,  # Lower clearance
     )
 
 
@@ -160,3 +161,154 @@ def reset_mocks():
     """Reset all mocks before each test."""
     yield
     # Cleanup if needed
+
+
+@pytest.fixture(scope="session")
+def seeded_test_data():
+    """
+    Session-scoped fixture that seeds the test database with comprehensive data.
+    
+    This fixture runs once per test session and creates:
+    - 20 sample businesses
+    - 15 sample people
+    - Ownership, supplier, and director relationships
+    - 50 business-to-business transactions
+    - 200 mobile money transactions
+    - 100 invoices with payment relationships
+    - Complex business scenarios (groups, shared directors)
+    
+    Use this fixture for integration and e2e tests that need realistic data.
+    """
+    # Import seed functions
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    
+    from scripts.seed_data import (
+        create_sample_businesses,
+        create_sample_people,
+        create_ownership_relationships,
+        create_supplier_relationships,
+        create_director_relationships,
+        create_transactions,
+        create_realistic_business_scenarios,
+        create_mobile_money_transactions,
+        create_invoices,
+    )
+    from src.infrastructure.database.neo4j_client import neo4j_client
+    
+    # Connect to Neo4j
+    try:
+        neo4j_client.connect()
+        
+        # Create businesses
+        business_ids = create_sample_businesses(20)
+        
+        # Create people
+        person_ids = create_sample_people(15)
+        
+        # Create relationships
+        create_ownership_relationships(business_ids, person_ids)
+        create_supplier_relationships(business_ids)
+        create_director_relationships(business_ids, person_ids)
+        create_transactions(business_ids, 50)
+        
+        # Create realistic business scenarios
+        create_realistic_business_scenarios(business_ids, person_ids)
+        
+        # Create mobile money transactions
+        create_mobile_money_transactions(business_ids, person_ids, 200)
+        
+        # Create invoices
+        create_invoices(business_ids, 100)
+        
+        yield {
+            "business_ids": business_ids,
+            "person_ids": person_ids,
+        }
+        
+    except Exception as e:
+        pytest.skip(f"Could not seed test data: {e}. Make sure Neo4j is running.")
+    finally:
+        neo4j_client.close()
+
+
+@pytest.fixture
+def minimal_test_data():
+    """
+    Function-scoped fixture that creates minimal test data for a single test.
+    
+    Creates:
+    - 3 sample businesses
+    - 2 sample people
+    - Basic relationships
+    
+    Use this for tests that need fresh data for each test run.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    
+    from scripts.seed_data import (
+        create_sample_businesses,
+        create_sample_people,
+        create_ownership_relationships,
+    )
+    from src.infrastructure.database.neo4j_client import neo4j_client
+    
+    try:
+        neo4j_client.connect()
+        
+        # Create minimal data
+        business_ids = create_sample_businesses(3)
+        person_ids = create_sample_people(2)
+        create_ownership_relationships(business_ids, person_ids)
+        
+        yield {
+            "business_ids": business_ids,
+            "person_ids": person_ids,
+        }
+        
+        # Cleanup: remove test data
+        try:
+            for bid in business_ids:
+                neo4j_client.execute_cypher(
+                    "MATCH (b:Business {id: $id}) DETACH DELETE b",
+                    {"id": bid}
+                )
+            for pid in person_ids:
+                neo4j_client.execute_cypher(
+                    "MATCH (p:Person {id: $id}) DETACH DELETE p",
+                    {"id": pid}
+                )
+        except Exception:
+            pass  # Ignore cleanup errors
+            
+    except Exception as e:
+        pytest.skip(f"Could not create minimal test data: {e}")
+    finally:
+        neo4j_client.close()
+
+
+@pytest.fixture
+def sample_business_ids(seeded_test_data):
+    """Get sample business IDs from seeded data."""
+    return seeded_test_data["business_ids"]
+
+
+@pytest.fixture
+def sample_person_ids(seeded_test_data):
+    """Get sample person IDs from seeded data."""
+    return seeded_test_data["person_ids"]
+
+
+@pytest.fixture
+def sample_business_id(sample_business_ids):
+    """Get a single sample business ID."""
+    return sample_business_ids[0] if sample_business_ids else None
+
+
+@pytest.fixture
+def sample_person_id(sample_person_ids):
+    """Get a single sample person ID."""
+    return sample_person_ids[0] if sample_person_ids else None

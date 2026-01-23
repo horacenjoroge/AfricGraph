@@ -35,7 +35,43 @@ def get_subgraph(
     format: str = Query("json", pattern="^(json|visualization|cypher)$"),
 ) -> dict:
     """Extract N-hop neighborhood subgraph."""
-    subgraph = extract_subgraph(node_id, max_hops, rel_types, node_labels)
+    from src.graph.models import Subgraph, GraphNode, GraphRelationship
+    
+    subgraph_result = extract_subgraph(node_id, max_hops, rel_types, node_labels)
+    
+    # Handle case where cache returns a dict instead of Subgraph object
+    # (cache serializes/deserializes Pydantic models as dicts)
+    if isinstance(subgraph_result, dict):
+        # Reconstruct nested objects
+        nodes = [GraphNode(**n) if isinstance(n, dict) else n for n in subgraph_result.get("nodes", [])]
+        relationships = [GraphRelationship(**r) if isinstance(r, dict) else r for r in subgraph_result.get("relationships", [])]
+        subgraph = Subgraph(
+            nodes=nodes,
+            relationships=relationships,
+            center_node_id=subgraph_result.get("center_node_id")
+        )
+    elif isinstance(subgraph_result, str) and subgraph_result.strip():
+        # If it's a non-empty string, try to parse it as JSON
+        import json
+        try:
+            data = json.loads(subgraph_result)
+            nodes = [GraphNode(**n) for n in data.get("nodes", [])]
+            relationships = [GraphRelationship(**r) for r in data.get("relationships", [])]
+            subgraph = Subgraph(
+                nodes=nodes,
+                relationships=relationships,
+                center_node_id=data.get("center_node_id")
+            )
+        except json.JSONDecodeError:
+            # If JSON parsing fails, return empty subgraph
+            subgraph = Subgraph(nodes=[], relationships=[], center_node_id=node_id)
+    else:
+        # If it's already a Subgraph object or None/empty, use it directly
+        if isinstance(subgraph_result, Subgraph):
+            subgraph = subgraph_result
+        else:
+            # Return empty subgraph if result is None or invalid
+            subgraph = Subgraph(nodes=[], relationships=[], center_node_id=node_id)
 
     if format == "visualization":
         return export_subgraph_for_visualization(subgraph)
@@ -195,3 +231,79 @@ def get_director_path(entity_a_id: str, entity_b_id: str) -> dict:
     if not path:
         raise HTTPException(status_code=404, detail="No director path found")
     return path
+
+
+@router.get("/node/{node_id}/details")
+def get_node_details(node_id: str) -> dict:
+    """Get detailed information about a node including connections and owners."""
+    from src.infrastructure.database.neo4j_client import neo4j_client
+    
+    # Get node basic info
+    node_query = """
+    MATCH (n {id: $node_id})
+    RETURN n, labels(n) as labels
+    LIMIT 1
+    """
+    node_rows = neo4j_client.execute_cypher(node_query, {"node_id": node_id})
+    if not node_rows:
+        raise HTTPException(status_code=404, detail="Node not found")
+    
+    node_data = node_rows[0]
+    node_props = dict(node_data.get("n", {}))
+    labels = node_data.get("labels", [])
+    
+    # Get owners (if Business)
+    owners = []
+    if "Business" in labels:
+        owners_query = """
+        MATCH (b:Business {id: $node_id})<-[:OWNS]-(owner)
+        RETURN owner, labels(owner) as owner_labels, 
+               [(owner)-[r:OWNS]->(b) | r.percentage] as ownership_percentages
+        LIMIT 20
+        """
+        owners_rows = neo4j_client.execute_cypher(owners_query, {"node_id": node_id})
+        for row in owners_rows:
+            owner_props = dict(row.get("owner", {}))
+            owner_labels = row.get("owner_labels", [])
+            percentages = row.get("ownership_percentages", [])
+            owners.append({
+                "id": owner_props.get("id", ""),
+                "name": owner_props.get("name", ""),
+                "labels": owner_labels,
+                "properties": owner_props,
+                "ownership_percentage": percentages[0] if percentages else None,
+            })
+    
+    # Get direct connections (1-hop neighbors)
+    connections_query = """
+    MATCH (n {id: $node_id})-[r]-(connected)
+    RETURN connected, labels(connected) as connected_labels, 
+           type(r) as rel_type, properties(r) as rel_props
+    LIMIT 50
+    """
+    connections_rows = neo4j_client.execute_cypher(connections_query, {"node_id": node_id})
+    connections = []
+    for row in connections_rows:
+        connected_props = dict(row.get("connected", {}))
+        connected_labels = row.get("connected_labels", [])
+        connections.append({
+            "id": connected_props.get("id", ""),
+            "name": connected_props.get("name", connected_props.get("id", "")),
+            "labels": connected_labels,
+            "properties": connected_props,
+            "relationship_type": row.get("rel_type", ""),
+            "relationship_properties": row.get("rel_props", {}),
+        })
+    
+    return {
+        "node": {
+            "id": node_id,
+            "name": node_props.get("name", node_id),
+            "labels": labels,
+            "properties": node_props,
+        },
+        "owners": owners,
+        "connections": connections,
+        "owner_count": len(owners),
+        "connection_count": len(connections),
+    }

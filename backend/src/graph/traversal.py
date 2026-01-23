@@ -33,19 +33,42 @@ def extract_subgraph(
         labels_str = ":".join(node_labels)
         node_filter = f"AND '{labels_str}' IN labels(n)"
 
+    # Optimized query to prevent memory issues
+    # Use a simpler pattern that limits results and avoids collecting all paths
+    # Limit to 200 nodes max to prevent memory overflow
+    max_nodes_limit = 200
     query = f"""
-    MATCH (start) WHERE id(start) = $node_id
-    MATCH path = (start)-[{rel_filter}*1..{max_hops}]-(n)
+    MATCH (start {{id: $node_id}})
+    // Get distinct nodes within max_hops (limited to prevent memory issues)
+    MATCH (start)-[{rel_filter}*1..{max_hops}]-(n)
     {node_filter}
-    WITH start, collect(DISTINCT n) as nodes, relationships(path) as rels
-    UNWIND rels as r
-    WITH start, nodes, collect(DISTINCT r) as rel_list
+    WITH start, collect(DISTINCT n) as all_nodes
+    // Limit nodes to prevent memory overflow - use head() function
+    WITH start, 
+         all_nodes[0..{max_nodes_limit}] as nodes
+    // Get relationships only between the limited set of nodes
+    UNWIND nodes as n1
+    UNWIND nodes as n2
+    WITH start, nodes, n1, n2
+    WHERE id(n1) < id(n2)
+    OPTIONAL MATCH (n1)-[r{rel_filter}]-(n2)
+    WITH start, nodes, collect(DISTINCT {{
+        from: coalesce(n1.id, toString(id(n1))),
+        to: coalesce(n2.id, toString(id(n2))),
+        type: type(r),
+        props: properties(r)
+    }}) as relationships
     RETURN 
-        id(start) as center_id,
-        [x in nodes | {{id: id(x), labels: labels(x), props: properties(x)}}] as nodes,
-        [x in rel_list | {{type: type(x), from: id(startNode(x)), to: id(endNode(x)), props: properties(x)}}] as relationships
+        start.id as center_id,
+        [x in nodes | {{
+            id: coalesce(x.id, toString(id(x))), 
+            labels: labels(x), 
+            props: properties(x)
+        }}] as nodes,
+        relationships
+    LIMIT 1
     """
-    rows = neo4j_client.execute_cypher(query, {"node_id": int(node_id)})
+    rows = neo4j_client.execute_cypher(query, {"node_id": node_id})
     if not rows:
         return Subgraph(nodes=[], relationships=[], center_node_id=node_id)
 
@@ -57,9 +80,14 @@ def extract_subgraph(
     # Add center node if not already included
     center_id = str(row.get("center_id", node_id))
     if not any(n.id == center_id for n in nodes):
-        center_node = neo4j_client.find_node("Business", {"id": center_id})
-        if center_node:
-            nodes.insert(0, GraphNode(id=center_id, labels=["Business"], properties=center_node))
+        # Try to find center node by id property
+        center_query = "MATCH (n {id: $node_id}) RETURN n, labels(n) as labels LIMIT 1"
+        center_rows = neo4j_client.execute_cypher(center_query, {"node_id": center_id})
+        if center_rows:
+            center_data = center_rows[0]
+            center_node = center_data.get("n", {})
+            center_labels = center_data.get("labels", [])
+            nodes.insert(0, GraphNode(id=center_id, labels=center_labels, properties=center_node))
 
     rels = [
         GraphRelationship(
@@ -88,14 +116,14 @@ def find_shortest_path(
         rel_filter = f":{types_str}"
 
     query = f"""
-    MATCH (a), (b) WHERE id(a) = $start_id AND id(b) = $end_id
+    MATCH (a {{id: $start_id}}), (b {{id: $end_id}})
     MATCH path = shortestPath((a)-[{rel_filter}*1..{max_depth}]->(b))
     RETURN 
-        [n in nodes(path) | {{id: id(n), labels: labels(n), props: properties(n)}}] as nodes,
-        [r in relationships(path) | {{type: type(r), from: id(startNode(r)), to: id(endNode(r)), props: properties(r)}}] as rels,
+        [n in nodes(path) | {{id: coalesce(n.id, toString(id(n))), labels: labels(n), props: properties(n)}}] as nodes,
+        [r in relationships(path) | {{type: type(r), from: coalesce(startNode(r).id, toString(id(startNode(r)))), to: coalesce(endNode(r).id, toString(id(endNode(r)))), props: properties(r)}}] as rels,
         length(path) as path_length
     """
-    rows = neo4j_client.execute_cypher(query, {"start_id": int(start_id), "end_id": int(end_id)})
+    rows = neo4j_client.execute_cypher(query, {"start_id": start_id, "end_id": end_id})
     if not rows or not rows[0].get("nodes"):
         return None
 
@@ -131,17 +159,17 @@ def find_all_paths(
         rel_filter = f":{types_str}"
 
     query = f"""
-    MATCH (a), (b) WHERE id(a) = $start_id AND id(b) = $end_id
+    MATCH (a {{id: $start_id}}), (b {{id: $end_id}})
     MATCH path = (a)-[{rel_filter}*1..{max_depth}]->(b)
     RETURN 
-        [n in nodes(path) | {{id: id(n), labels: labels(n), props: properties(n)}}] as nodes,
-        [r in relationships(path) | {{type: type(r), from: id(startNode(r)), to: id(endNode(r)), props: properties(r)}}] as rels,
+        [n in nodes(path) | {{id: coalesce(n.id, toString(id(n))), labels: labels(n), props: properties(n)}}] as nodes,
+        [r in relationships(path) | {{type: type(r), from: coalesce(startNode(r).id, toString(id(startNode(r)))), to: coalesce(endNode(r).id, toString(id(endNode(r)))), props: properties(r)}}] as rels,
         length(path) as path_length
     ORDER BY path_length ASC
     LIMIT $limit
     """
     rows = neo4j_client.execute_cypher(
-        query, {"start_id": int(start_id), "end_id": int(end_id), "limit": limit}
+        query, {"start_id": start_id, "end_id": end_id, "limit": limit}
     )
 
     paths = []

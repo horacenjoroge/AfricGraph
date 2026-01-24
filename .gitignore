@@ -94,3 +94,8 @@ frontend/dist/
 # OS
 Thumbs.db
 .DS_Store
+
+# Uploaded files
+uploads/
+*.csv
+!backend/scripts/mpesa_csv_template.csv

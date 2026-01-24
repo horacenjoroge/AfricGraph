@@ -83,3 +83,11 @@ Run the API:
 ```bash
 uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+Start Celery worker (for ingestion jobs):
+
+```bash
+celery -A src.ingestion.pipeline.tasks worker --loglevel=info
+```
+
+**Note**: Ingestion jobs require Celery workers to process. Jobs will stay in "pending" status until a worker picks them up. See `docs/celery-workers.md` for details.

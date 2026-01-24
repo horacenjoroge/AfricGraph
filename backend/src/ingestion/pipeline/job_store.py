@@ -106,3 +106,35 @@ def update_job_status(
         params["stats"] = json.dumps(stats, default=str)
     with postgres_client.get_session() as s:
         s.execute(text(f"UPDATE {TABLE} SET {', '.join(updates)} WHERE id = :id"), params)
+
+
+def list_jobs(limit: int = 100, status: Optional[str] = None) -> list[Dict[str, Any]]:
+    """List ingestion jobs, optionally filtered by status."""
+    query = f"""
+    SELECT id, source, source_params, status, started_at, finished_at, error_message, stats, created_at
+    FROM {TABLE}
+    """
+    params = {"limit": limit}
+    if status:
+        query += " WHERE status = :status"
+        params["status"] = status
+    query += " ORDER BY created_at DESC LIMIT :limit"
+    
+    with postgres_client.get_session() as s:
+        r = s.execute(text(query), params)
+        rows = r.fetchall()
+    
+    return [
+        {
+            "job_id": str(row[0]),
+            "job_type": row[1],
+            "source_params": row[2] or {},
+            "status": row[3],
+            "started_at": row[4].isoformat() if row[4] else None,
+            "completed_at": row[5].isoformat() if row[5] else None,
+            "error_message": row[6],
+            "stats": row[7] or {},
+            "created_at": row[8].isoformat() if row[8] else None,
+        }
+        for row in rows
+    ]

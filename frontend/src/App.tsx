@@ -3,6 +3,7 @@ import DashboardLayout from './components/layout/DashboardLayout'
 import DashboardPage from './pages/Dashboard'
 import BusinessSearchPage from './pages/BusinessSearch'
 import BusinessDetailPage from './pages/BusinessDetail'
+import TransactionsPage from './pages/Transactions'
 import GraphExplorerPage from './pages/GraphExplorer'
 import RiskAnalysisPage from './pages/RiskAnalysis'
 import FraudAlertsPage from './pages/FraudAlerts'
@@ -24,6 +25,7 @@ function App() {
               <Route index element={<DashboardPage />} />
               <Route path="businesses" element={<BusinessSearchPage />} />
               <Route path="businesses/:id" element={<BusinessDetailPage />} />
+              <Route path="transactions" element={<TransactionsPage />} />
               <Route path="graph" element={<GraphExplorerPage />} />
               <Route path="risk" element={<RiskAnalysisPage />} />
               <Route path="fraud" element={<FraudAlertsPage />} />

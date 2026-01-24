@@ -78,3 +78,10 @@ export const AdminIcon = ({ className = "w-5 h-5" }: { className?: string }) => 
     <circle cx="12" cy="12" r="2" />
   </svg>
 )
+
+export const TransactionIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21 12H3M16 6l5 6-5 6M8 6l-5 6 5 6" />
+    <circle cx="12" cy="12" r="2" />
+  </svg>
+)

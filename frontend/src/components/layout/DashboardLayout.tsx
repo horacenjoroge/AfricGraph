@@ -12,6 +12,7 @@ import {
   AuditIcon,
   SettingsIcon,
   AdminIcon,
+  TransactionIcon,
 } from '../icons/IconComponents'
 import ThemeToggle from '../ThemeToggle'
 import TenantSelector from '../tenancy/TenantSelector'
@@ -23,6 +24,7 @@ interface DashboardLayoutProps {
 const baseNavItems = [
   { path: '/', label: 'Dashboard', Icon: DashboardIcon },
   { path: '/businesses', label: 'Businesses', Icon: BusinessIcon },
+  { path: '/transactions', label: 'Transactions', Icon: TransactionIcon },
   { path: '/graph', label: 'Graph Explorer', Icon: GraphIcon },
   { path: '/risk', label: 'Risk Analysis', Icon: RiskIcon },
   { path: '/fraud', label: 'Fraud Alerts', Icon: AlertIcon },

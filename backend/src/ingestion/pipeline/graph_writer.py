@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from src.config.settings import settings
 from src.infrastructure.audit import audit_logger
 from src.infrastructure.database.neo4j_client import neo4j_client
+from src.cache.invalidation import invalidate_graph_cache
 
 from src.ingestion.normalizers.canonical import (
     CanonicalContact,
@@ -55,14 +56,34 @@ def write_mobile_money(
         tid = (t.source_id or "").strip()
         if not tid:
             continue
+        
+        # Extract provider_txn_id from source_id (format: "provider:id")
+        provider_txn_id = None
+        if ":" in tid:
+            provider_txn_id = tid.split(":", 1)[1]
+        
+        # Get direction from raw data or infer from type
+        direction = None
+        if hasattr(t, 'raw') and isinstance(t.raw, dict) and t.raw.get('direction'):
+            direction = t.raw['direction']
+        elif t.type == "payment_in":
+            direction = "from"  # received from
+        elif t.type == "payment_out":
+            direction = "to"  # sent to
+        
         tx_props = _to_node_props({
             "id": tid,
-            "amount": float(t.amount),
-            "currency": (t.currency or "USD").strip(),
+            "amount": float(t.amount_original),  # Original KES amount
+            "currency": (t.currency_original or "KES").strip(),  # Original currency
             "date": t.date.isoformat() if hasattr(t.date, "isoformat") else str(t.date),
             "type": (t.type or "payment_in").strip(),
+            "direction": direction,  # "from" or "to"
             "description": (t.description or "")[:500],
             "source_provider": (t.source_provider or "").strip(),
+            "provider_txn_id": provider_txn_id,  # Receipt number
+            "counterparty_name": t.counterparty,  # Counterparty name
+            "counterparty_phone": t.counterparty_phone,  # Phone number
+            "balance_after": float(t.balance_after) if t.balance_after is not None else None,  # Balance after transaction
             "created_at": _now().isoformat(),
         })
         neo4j_client.merge_node("Transaction", tid, tx_props)
@@ -72,18 +93,25 @@ def write_mobile_money(
         person_props = _to_node_props({
             "id": person_id,
             "name": (t.counterparty or "Unknown").strip()[:255],
+            "phone": t.counterparty_phone,  # Add phone
             "created_at": _now().isoformat(),
         })
         neo4j_client.merge_node("Person", person_id, person_props)
         nodes += 1
 
         neo4j_client.merge_relationship_by_business_id(
-            "Transaction", tid, "Person", person_id, "INVOLVES", {"role": "counterparty"}
+            "Transaction", tid, "Person", person_id, "INVOLVES", {
+                "role": "counterparty",
+                "direction": direction  # Add direction to relationship
+            }
         )
         rels += 1
 
     if transactions:
         audit_logger.log_system("ingestion.mobile_money.write", extra={"count": len(transactions), "nodes": nodes, "rels": rels})
+        # Invalidate graph cache for all affected nodes to ensure fresh data is shown
+        invalidate_graph_cache()  # Clear all graph caches since we don't know which specific nodes were affected
+    
     return {"nodes_merged": nodes, "relationships_merged": rels}
 
 

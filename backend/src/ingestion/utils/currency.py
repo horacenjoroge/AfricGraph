@@ -29,4 +29,7 @@ class CurrencyConverter:
         r_to = self._rates.get(to)
         if r_from is None or r_to is None:
             return amount
-        return amount * r_to / r_from
+        # Fixed: Rates are "to USD", so 1 KES = 0.0077 USD
+        # To convert 100 KES to USD: 100 * 0.0077 = 0.77 USD
+        # The original formula was inverted: amount * r_to / r_from
+        return amount * r_from / r_to

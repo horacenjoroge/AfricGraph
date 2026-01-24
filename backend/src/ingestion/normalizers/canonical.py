@@ -34,6 +34,7 @@ class CanonicalTransaction:
     counterparty_raw: Optional[str] = None
     counterparty_phone: Optional[str] = None
     resolved_counterparty_entity_id: Optional[str] = None
+    balance_after: Optional[float] = None
     raw: Dict[str, Any] = field(default_factory=dict)
 
 

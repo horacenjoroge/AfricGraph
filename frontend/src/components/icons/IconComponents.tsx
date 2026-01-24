@@ -70,3 +70,11 @@ export const SettingsIcon = ({ className = "w-5 h-5" }: { className?: string }) 
     <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24" />
   </svg>
 )
+
+export const AdminIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+    <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
+    <circle cx="12" cy="12" r="2" />
+  </svg>
+)

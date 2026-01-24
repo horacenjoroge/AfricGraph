@@ -1,6 +1,7 @@
-import { ReactNode } from 'react'
+import { ReactNode, useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import axios from 'axios'
 import {
   DashboardIcon,
   BusinessIcon,
@@ -10,15 +11,16 @@ import {
   WorkflowIcon,
   AuditIcon,
   SettingsIcon,
+  AdminIcon,
 } from '../icons/IconComponents'
 import ThemeToggle from '../ThemeToggle'
 import TenantSelector from '../tenancy/TenantSelector'
 
 interface DashboardLayoutProps {
-  children: ReactNode
+  children?: ReactNode
 }
 
-const navItems = [
+const baseNavItems = [
   { path: '/', label: 'Dashboard', Icon: DashboardIcon },
   { path: '/businesses', label: 'Businesses', Icon: BusinessIcon },
   { path: '/graph', label: 'Graph Explorer', Icon: GraphIcon },
@@ -31,6 +33,40 @@ const navItems = [
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation()
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [checkingRole, setCheckingRole] = useState(true)
+
+  useEffect(() => {
+    checkAdminRole()
+  }, [])
+
+  const checkAdminRole = async () => {
+    try {
+      const token = localStorage.getItem('auth_token')
+      if (!token) {
+        setCheckingRole(false)
+        return
+      }
+
+      const response = await axios.get('/auth/me', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      setIsAdmin(response.data.role === 'admin')
+    } catch (error) {
+      console.error('Failed to check admin role:', error)
+    } finally {
+      setCheckingRole(false)
+    }
+  }
+
+  const navItems = checkingRole
+    ? baseNavItems
+    : isAdmin
+    ? [...baseNavItems, { path: '/admin', label: 'Admin', Icon: AdminIcon }]
+    : baseNavItems
 
   return (
     <div className="min-h-screen bg-deep-space flex">

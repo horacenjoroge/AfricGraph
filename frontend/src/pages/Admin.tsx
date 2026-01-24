@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import TenantManagement from '../components/admin/TenantManagement'
 import IngestionManagement from '../components/admin/IngestionManagement'
+import CacheManagement from '../components/admin/CacheManagement'
 import axios from 'axios'
 import { useNotifications } from '../contexts/NotificationContext'
 import { useNavigate } from 'react-router-dom'
 
-type TabType = 'tenants' | 'ingestion'
+type TabType = 'tenants' | 'ingestion' | 'cache'
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabType>('tenants')
@@ -90,6 +91,7 @@ export default function AdminPage() {
   const tabs: { id: TabType; label: string }[] = [
     { id: 'tenants', label: 'Tenant Management' },
     { id: 'ingestion', label: 'Ingestion Management' },
+    { id: 'cache', label: 'Cache Management' },
   ]
 
   return (
@@ -125,6 +127,7 @@ export default function AdminPage() {
         >
           {activeTab === 'tenants' && <TenantManagement />}
           {activeTab === 'ingestion' && <IngestionManagement />}
+          {activeTab === 'cache' && <CacheManagement />}
         </motion.div>
       </div>
     </div>

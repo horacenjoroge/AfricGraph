@@ -26,8 +26,10 @@ class TenantMiddleware(BaseHTTPMiddleware):
         if not tenant:
             # Allow some endpoints without tenant (e.g., tenant creation, auth)
             allowed_without_tenant = [
+                "/tenants",
                 "/api/tenants",
                 "/api/auth",
+                "/auth",
                 "/graphql",  # GraphQL handles auth internally
             ]
             if any(request.url.path.startswith(path) for path in allowed_without_tenant):

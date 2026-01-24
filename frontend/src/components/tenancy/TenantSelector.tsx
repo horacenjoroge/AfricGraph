@@ -23,14 +23,21 @@ export default function TenantSelector() {
   }, [])
 
   const fetchTenants = async () => {
+    setLoading(true)
     try {
-      const response = await axios.get('/api/tenants')
-      setTenants(response.data || [])
+      const response = await axios.get('/tenants')
+      // Backend returns {tenants: [...], total: ...}
+      const tenantList = response.data?.tenants || response.data || []
+      setTenants(Array.isArray(tenantList) ? tenantList : [])
+      console.log('Fetched tenants:', tenantList)
     } catch (error: any) {
       console.error('Failed to fetch tenants:', error)
+      setTenants([])
       if (error.response?.status !== 404) {
         showError('Failed to load tenants')
       }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -104,23 +111,27 @@ export default function TenantSelector() {
 
       <AnimatePresence>
         {isOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setIsOpen(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="absolute top-full mt-2 right-0 z-50 glass-panel-strong border border-glass-border rounded-lg p-2 min-w-[200px] max-h-[300px] overflow-y-auto shadow-lg"
-            >
-              {tenants.length === 0 ? (
-                <div className="px-4 py-3 text-sm text-gray-400 text-center">
-                  No tenants available
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute top-full mt-2 right-0 z-50 glass-panel-strong border border-glass-border rounded-lg p-2 min-w-[200px] max-h-[300px] overflow-y-auto shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {loading ? (
+              <div className="px-4 py-3 text-sm text-gray-400 text-center">
+                Loading...
+              </div>
+            ) : tenants.length === 0 ? (
+              <div className="px-4 py-3 text-sm text-gray-400 text-center">
+                <div className="mb-2">No tenants available</div>
+                <div className="text-xs text-gray-500 mt-2">
+                  Create a tenant via API or check backend logs
                 </div>
-              ) : (
-                tenants.map((tenant) => (
+              </div>
+            ) : (
+              <>
+                {tenants.map((tenant) => (
                   <button
                     key={tenant.tenant_id}
                     onClick={() => switchTenant(tenant)}
@@ -135,21 +146,20 @@ export default function TenantSelector() {
                       {tenant.tenant_id.substring(0, 8)}...
                     </div>
                   </button>
-                ))
-              )}
-              <div className="border-t border-glass-border mt-2 pt-2">
-                <button
-                  onClick={() => {
-                    setIsOpen(false)
-                    fetchTenants()
-                  }}
-                  className="w-full text-left px-4 py-2 rounded-lg hover:bg-glass/50 text-sm text-gray-400"
-                >
-                  Refresh List
-                </button>
-              </div>
-            </motion.div>
-          </>
+                ))}
+                <div className="border-t border-glass-border mt-2 pt-2">
+                  <button
+                    onClick={() => {
+                      fetchTenants()
+                    }}
+                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-glass/50 text-sm text-gray-400"
+                  >
+                    Refresh List
+                  </button>
+                </div>
+              </>
+            )}
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

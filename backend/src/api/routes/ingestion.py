@@ -46,8 +46,9 @@ async def upload_csv_file(file: UploadFile = File(...)) -> dict:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
+        # Return relative path for Docker compatibility
         return {
-            "file_path": str(file_path.absolute()),
+            "file_path": str(file_path),  # Relative path, not absolute
             "filename": file.filename,
             "file_id": file_id
         }
@@ -55,11 +56,29 @@ async def upload_csv_file(file: UploadFile = File(...)) -> dict:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
 
+def _normalize_path(path: str) -> str:
+    """Convert absolute path to relative path for Docker compatibility."""
+    path_obj = Path(path)
+    # If it's an absolute path, try to make it relative
+    if path_obj.is_absolute():
+        # Check if it's in the backend/uploads directory
+        if "uploads" in path_obj.parts:
+            # Extract the uploads/... part
+            uploads_idx = path_obj.parts.index("uploads")
+            return str(Path(*path_obj.parts[uploads_idx:]))
+        # Otherwise, just use the filename in uploads/
+        return f"uploads/{path_obj.name}"
+    # Already relative, return as-is
+    return path
+
+
 @router.post("/mobile-money")
 def trigger_mobile_money(body: MobileMoneyTrigger) -> dict:
     """Enqueue mobile money ingestion. Returns job_id to poll status."""
-    jid = create_job("mobile_money", {"path": body.path, "provider": body.provider, "currency": body.currency})
-    ingest_mobile_money.delay(body.path, body.provider, body.currency, job_id=jid)
+    # Normalize path to be relative for Docker
+    normalized_path = _normalize_path(body.path)
+    jid = create_job("mobile_money", {"path": normalized_path, "provider": body.provider, "currency": body.currency})
+    ingest_mobile_money.delay(normalized_path, body.provider, body.currency, job_id=jid)
     return {"job_id": jid, "status": "pending"}
 
 

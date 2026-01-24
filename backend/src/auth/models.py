@@ -19,7 +19,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=8, max_length=72, description="Password must be 8-72 bytes (approximately 72 ASCII characters)")
 
 
 class UserInDB(UserBase):

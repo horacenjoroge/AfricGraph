@@ -1,5 +1,5 @@
 """Tenant management API endpoints."""
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Header
 from typing import Optional, List, Any
 from pydantic import BaseModel
 from datetime import datetime
@@ -11,6 +11,8 @@ from src.tenancy.export import TenantDataExporter
 from src.tenancy.migration import TenantMigrationManager
 from src.tenancy.context import get_current_tenant
 from src.infrastructure.logging import get_logger
+from src.auth.service import get_user_by_id
+from src.auth.jwt_handler import validate_access_token
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 logger = get_logger(__name__)
@@ -46,6 +48,38 @@ def get_migration_manager():
     return migration_manager
 
 
+def get_current_user_id(authorization: Optional[str] = Header(None)) -> Optional[str]:
+    """Extract user ID from JWT token in Authorization header."""
+    if not authorization:
+        return None
+    try:
+        token = authorization.replace("Bearer ", "").strip()
+        payload = validate_access_token(token)
+        if payload:
+            return payload.get("sub")
+    except Exception:
+        pass
+    return None
+
+
+def require_admin(user_id: Optional[str] = Depends(get_current_user_id)) -> dict:
+    """Require admin role for tenant management operations."""
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    user = get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Admin role required for tenant management operations"
+        )
+    
+    return {"user_id": user_id, "role": user.role}
+
+
 class TenantCreateRequest(BaseModel):
     """Tenant creation request."""
     tenant_id: str
@@ -77,8 +111,11 @@ class MigrationRequest(BaseModel):
 
 
 @router.post("", response_model=dict)
-def create_tenant(request: TenantCreateRequest) -> dict:
-    """Create a new tenant."""
+def create_tenant(
+    request: TenantCreateRequest,
+    admin: dict = Depends(require_admin)
+) -> dict:
+    """Create a new tenant. Requires admin role."""
     try:
         manager = get_tenant_manager()
         tenant = manager.create_tenant(
@@ -87,6 +124,7 @@ def create_tenant(request: TenantCreateRequest) -> dict:
             domain=request.domain,
             config=request.config,
         )
+        logger.info(f"Tenant created by admin {admin['user_id']}", tenant_id=request.tenant_id)
         return tenant.model_dump(mode="json")
     except Exception as e:
         logger.exception("Failed to create tenant", error=str(e))
@@ -94,12 +132,34 @@ def create_tenant(request: TenantCreateRequest) -> dict:
 
 
 @router.get("/{tenant_id}", response_model=dict)
-def get_tenant(tenant_id: str) -> dict:
-    """Get tenant by ID."""
+def get_tenant(
+    tenant_id: str,
+    user_id: Optional[str] = Depends(get_current_user_id),
+) -> dict:
+    """Get tenant by ID. Users can only view their current tenant, admins can view any tenant."""
     manager = get_tenant_manager()
     tenant = manager.get_tenant(tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    # Check if user is admin or viewing their own tenant
+    if user_id:
+        user = get_user_by_id(user_id)
+        if user and user.role == "admin":
+            # Admins can view any tenant
+            return tenant.model_dump(mode="json")
+        
+        # Regular users can only view their current tenant
+        current_tenant = get_current_tenant()
+        if current_tenant and current_tenant.tenant_id == tenant_id:
+            return tenant.model_dump(mode="json")
+        else:
+            raise HTTPException(
+                status_code=403,
+                detail="You can only view your current tenant. Admin role required to view other tenants."
+            )
+    
+    # If not authenticated, allow viewing (for development)
     return tenant.model_dump(mode="json")
 
 
@@ -107,8 +167,9 @@ def get_tenant(tenant_id: str) -> dict:
 def list_tenants(
     status: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=1000),
+    admin: dict = Depends(require_admin),
 ) -> dict:
-    """List tenants."""
+    """List all tenants. Requires admin role."""
     try:
         manager = get_tenant_manager()
         tenants = manager.list_tenants(status=status, limit=limit)
@@ -122,8 +183,12 @@ def list_tenants(
 
 
 @router.put("/{tenant_id}", response_model=dict)
-def update_tenant(tenant_id: str, request: TenantUpdateRequest) -> dict:
-    """Update tenant."""
+def update_tenant(
+    tenant_id: str,
+    request: TenantUpdateRequest,
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Update tenant. Requires admin role."""
     manager = get_tenant_manager()
     tenant = manager.update_tenant(
         tenant_id=tenant_id,
@@ -134,12 +199,17 @@ def update_tenant(tenant_id: str, request: TenantUpdateRequest) -> dict:
     )
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
+    logger.info(f"Tenant updated by admin {admin['user_id']}", tenant_id=tenant_id)
     return tenant.model_dump(mode="json")
 
 
 @router.post("/{tenant_id}/config", response_model=dict)
-def set_tenant_config(tenant_id: str, request: TenantConfigRequest) -> dict:
-    """Set tenant-specific configuration."""
+def set_tenant_config(
+    tenant_id: str,
+    request: TenantConfigRequest,
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Set tenant-specific configuration. Requires admin role."""
     try:
         manager = get_tenant_manager()
         config = manager.set_tenant_config(
@@ -148,6 +218,7 @@ def set_tenant_config(tenant_id: str, request: TenantConfigRequest) -> dict:
             value=request.value,
             description=request.description,
         )
+        logger.info(f"Tenant config set by admin {admin['user_id']}", tenant_id=tenant_id, key=request.key)
         return config.model_dump(mode="json")
     except Exception as e:
         logger.exception("Failed to set tenant config", error=str(e))
@@ -155,8 +226,33 @@ def set_tenant_config(tenant_id: str, request: TenantConfigRequest) -> dict:
 
 
 @router.get("/{tenant_id}/config", response_model=dict)
-def get_tenant_configs(tenant_id: str) -> dict:
-    """Get all tenant configurations."""
+def get_tenant_configs(
+    tenant_id: str,
+    user_id: Optional[str] = Depends(get_current_user_id),
+) -> dict:
+    """Get all tenant configurations. Users can only view their current tenant's config, admins can view any tenant."""
+    # Check if user is admin or viewing their own tenant
+    if user_id:
+        user = get_user_by_id(user_id)
+        if user and user.role == "admin":
+            # Admins can view any tenant's config
+            manager = get_tenant_manager()
+            configs = manager.get_all_tenant_configs(tenant_id)
+            return {"tenant_id": tenant_id, "configs": configs}
+        
+        # Regular users can only view their current tenant's config
+        current_tenant = get_current_tenant()
+        if current_tenant and current_tenant.tenant_id == tenant_id:
+            manager = get_tenant_manager()
+            configs = manager.get_all_tenant_configs(tenant_id)
+            return {"tenant_id": tenant_id, "configs": configs}
+        else:
+            raise HTTPException(
+                status_code=403,
+                detail="You can only view your current tenant's configuration. Admin role required to view other tenants."
+            )
+    
+    # If not authenticated, allow viewing (for development)
     manager = get_tenant_manager()
     configs = manager.get_all_tenant_configs(tenant_id)
     return {"tenant_id": tenant_id, "configs": configs}
@@ -168,8 +264,9 @@ def export_tenant_data(
     include_nodes: bool = Query(True),
     include_relationships: bool = Query(True),
     include_metadata: bool = Query(True),
+    admin: dict = Depends(require_admin),
 ) -> dict:
-    """Export tenant data."""
+    """Export tenant data. Requires admin role."""
     try:
         exp = get_exporter()
         data = exp.export_tenant_data(
@@ -178,6 +275,7 @@ def export_tenant_data(
             include_relationships=include_relationships,
             include_metadata=include_metadata,
         )
+        logger.info(f"Tenant data exported by admin {admin['user_id']}", tenant_id=tenant_id)
         return data
     except Exception as e:
         logger.exception("Failed to export tenant data", error=str(e))
@@ -185,14 +283,22 @@ def export_tenant_data(
 
 
 @router.post("/migrate", response_model=dict)
-def migrate_tenant(request: MigrationRequest) -> dict:
-    """Migrate tenant data."""
+def migrate_tenant(
+    request: MigrationRequest,
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Migrate tenant data. Requires admin role."""
     try:
         mgr = get_migration_manager()
         result = mgr.migrate_tenant(
             source_tenant_id=request.source_tenant_id,
             target_tenant_id=request.target_tenant_id,
             dry_run=request.dry_run,
+        )
+        logger.info(
+            f"Tenant migration initiated by admin {admin['user_id']}",
+            source=request.source_tenant_id,
+            target=request.target_tenant_id,
         )
         return result
     except Exception as e:
@@ -204,8 +310,9 @@ def migrate_tenant(request: MigrationRequest) -> dict:
 def get_aggregated_analytics(
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
+    admin: dict = Depends(require_admin),
 ) -> dict:
-    """Get aggregated analytics across all tenants (no individual tenant data)."""
+    """Get aggregated analytics across all tenants. Requires admin role."""
     try:
         anl = get_analytics()
         stats = anl.get_aggregated_stats(
@@ -220,8 +327,14 @@ def get_aggregated_analytics(
 
 @router.get("/current", response_model=dict)
 def get_current_tenant_info() -> dict:
-    """Get current tenant information from context."""
+    """Get current tenant information from context. Accessible to all authenticated users."""
     tenant = get_current_tenant()
     if not tenant:
         raise HTTPException(status_code=404, detail="No tenant context")
     return tenant.model_dump(mode="json")
+
+
+@router.get("/me", response_model=dict)
+def get_my_tenant_info() -> dict:
+    """Get current tenant information (alias for /current). Accessible to all authenticated users."""
+    return get_current_tenant_info()

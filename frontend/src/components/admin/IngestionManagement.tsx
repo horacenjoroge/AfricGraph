@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import axios from 'axios'
 import { useNotifications } from '../../contexts/NotificationContext'
@@ -17,8 +17,11 @@ interface IngestionJob {
 export default function IngestionManagement() {
   const [jobs, setJobs] = useState<IngestionJob[]>([])
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [showMobileMoneyForm, setShowMobileMoneyForm] = useState(false)
   const [showAccountingForm, setShowAccountingForm] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [mobileMoneyForm, setMobileMoneyForm] = useState({
     path: '',
     provider: 'mpesa',
@@ -30,23 +33,79 @@ export default function IngestionManagement() {
   })
   const { showSuccess, showError } = useNotifications()
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (!file.name.endsWith('.csv')) {
+        showError('Please select a CSV file')
+        return
+      }
+      setSelectedFile(file)
+      // Show filename in the form
+      setMobileMoneyForm({ ...mobileMoneyForm, path: file.name })
+    }
+  }
+
+  const uploadFile = async (file: File): Promise<string> => {
+    const token = localStorage.getItem('auth_token')
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await axios.post(
+      '/api/v1/ingest/upload-csv',
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    )
+
+    return response.data.file_path
+  }
+
   const triggerMobileMoney = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    if (!selectedFile) {
+      showError('Please select a CSV file')
+      return
+    }
+
     try {
       setLoading(true)
+      setUploading(true)
+      
+      // First upload the file
+      const serverPath = await uploadFile(selectedFile)
+      
+      setUploading(false)
+      
+      // Then trigger ingestion with server path
       const token = localStorage.getItem('auth_token')
       const response = await axios.post(
         '/api/v1/ingest/mobile-money',
-        mobileMoneyForm,
+        {
+          path: serverPath,
+          provider: mobileMoneyForm.provider,
+          currency: mobileMoneyForm.currency,
+        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         }
       )
-      showSuccess(`Mobile money ingestion started. Job ID: ${response.data.job_id}`)
+      
+      showSuccess(`Mobile money ingestion started. Job ID: ${response.data.job_id}. Check the Workflows page to monitor progress.`)
       setShowMobileMoneyForm(false)
       setMobileMoneyForm({ path: '', provider: 'mpesa', currency: 'KES' })
+      setSelectedFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      
       // Poll for job status
       pollJobStatus(response.data.job_id)
     } catch (error: any) {
@@ -54,6 +113,7 @@ export default function IngestionManagement() {
       showError(error.response?.data?.detail || 'Failed to start ingestion')
     } finally {
       setLoading(false)
+      setUploading(false)
     }
   }
 
@@ -74,7 +134,7 @@ export default function IngestionManagement() {
           },
         }
       )
-      showSuccess(`Accounting ingestion started. Job ID: ${response.data.job_id}`)
+      showSuccess(`Accounting ingestion started. Job ID: ${response.data.job_id}. Check the Workflows page to monitor progress.`)
       setShowAccountingForm(false)
       setAccountingForm({ connector: 'xero', modified_after: '' })
       // Poll for job status
@@ -100,9 +160,9 @@ export default function IngestionManagement() {
         const job = response.data
         updateJobInList(job)
 
-        if (job.status === 'completed' || job.status === 'failed') {
+        if (job.status === 'completed' || job.status === 'success' || job.status === 'failed') {
           clearInterval(interval)
-          if (job.status === 'completed') {
+          if (job.status === 'completed' || job.status === 'success') {
             showSuccess(`Ingestion job ${jobId} completed successfully`)
           } else {
             showError(`Ingestion job ${jobId} failed: ${job.error_message || 'Unknown error'}`)
@@ -150,6 +210,26 @@ export default function IngestionManagement() {
       <div>
         <h2 className="text-xl font-bold mb-2">Ingestion Jobs</h2>
         <p className="text-sm text-gray-400">Trigger and monitor data ingestion jobs</p>
+        <div className="mt-3 glass-panel border border-blue-500/30 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="text-blue-400 text-xl">ℹ️</div>
+            <div>
+              <h4 className="font-medium text-gray-300 mb-1">How Ingestion Jobs Work</h4>
+              <p className="text-sm text-gray-400 mb-2">
+                Ingestion jobs are <strong>automatic</strong> - they process immediately without approval:
+              </p>
+              <ul className="text-sm text-gray-400 space-y-1 list-disc list-inside ml-2 mb-2">
+                <li>Job is queued (status: <span className="text-yellow-400">PENDING</span>)</li>
+                <li>Celery worker picks it up automatically</li>
+                <li>Status changes to <span className="text-blue-400">RUNNING</span> during processing</li>
+                <li>Completes as <span className="text-green-400">SUCCESS</span> or <span className="text-red-400">FAILED</span></li>
+              </ul>
+              <p className="text-sm text-gray-400">
+                Check the <strong>Workflows</strong> page to monitor all jobs. If jobs stay pending, ensure Celery workers are running.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Trigger Buttons */}
@@ -187,15 +267,45 @@ export default function IngestionManagement() {
           <h3 className="text-lg font-bold mb-4">Mobile Money Ingestion</h3>
           <form onSubmit={triggerMobileMoney} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">CSV File Path</label>
-              <input
-                type="text"
-                value={mobileMoneyForm.path}
-                onChange={(e) => setMobileMoneyForm({ ...mobileMoneyForm, path: e.target.value })}
-                className="w-full px-4 py-2 bg-deep-space-50 border border-glass-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-300"
-                placeholder="/path/to/transactions.csv"
-                required
-              />
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                CSV File
+              </label>
+              <div className="space-y-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="csv-file-input"
+                />
+                <label
+                  htmlFor="csv-file-input"
+                  className="flex items-center justify-center w-full px-4 py-3 bg-deep-space-50 border border-glass-border rounded-lg cursor-pointer hover:bg-deep-space-100 transition-colors"
+                >
+                  <svg
+                    className="w-5 h-5 mr-2 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                    />
+                  </svg>
+                  <span className="text-gray-300">
+                    {selectedFile ? selectedFile.name : 'Choose CSV file...'}
+                  </span>
+                </label>
+                {selectedFile && (
+                  <p className="text-xs text-gray-500">
+                    Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(2)} KB)
+                  </p>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">Provider</label>
@@ -222,14 +332,21 @@ export default function IngestionManagement() {
             <div className="flex gap-3">
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !selectedFile}
                 className="px-6 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Starting...' : 'Start Ingestion'}
+                {uploading ? 'Uploading...' : loading ? 'Starting...' : 'Start Ingestion'}
               </button>
               <button
                 type="button"
-                onClick={() => setShowMobileMoneyForm(false)}
+                onClick={() => {
+                  setShowMobileMoneyForm(false)
+                  setSelectedFile(null)
+                  setMobileMoneyForm({ path: '', provider: 'mpesa', currency: 'KES' })
+                  if (fileInputRef.current) {
+                    fileInputRef.current.value = ''
+                  }
+                }}
                 className="px-6 py-2 bg-gray-500/20 text-gray-400 rounded-lg hover:bg-gray-500/30 transition-colors"
               >
                 Cancel

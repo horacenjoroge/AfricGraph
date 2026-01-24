@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import ForceGraph3D from 'react-force-graph-3d'
 import axios from 'axios'
 import GraphControls, { GraphFilters } from '../components/graph/GraphControls'
@@ -33,6 +34,7 @@ interface Link {
 }
 
 export default function GraphExplorerPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [allNodes, setAllNodes] = useState<Node[]>([])
   const [allLinks, setAllLinks] = useState<Link[]>([])
   const [displayNodes, setDisplayNodes] = useState<Node[]>([])
@@ -60,9 +62,146 @@ export default function GraphExplorerPage() {
   const [graphDimensions, setGraphDimensions] = useState({ width: 800, height: 600 })
   const [cameraDistance, setCameraDistance] = useState(400)
 
-  useEffect(() => {
-    loadGraphData()
+  // Define loadGraphData first so it's available for error fallback
+  const loadGraphData = useCallback(async () => {
+    setLoading(true)
+    try {
+      // Fetch graph data from API
+      // For now, using mock data structure
+      // Replace with actual API call: /api/v1/graph/subgraph/{node_id}
+      const mockNodes: Node[] = [
+        { id: '1', name: 'Business A', labels: ['Business'], riskScore: 75 },
+        { id: '2', name: 'Business B', labels: ['Business'], riskScore: 45 },
+        { id: '3', name: 'Person X', labels: ['Person'] },
+        { id: '4', name: 'Business C', labels: ['Business'], riskScore: 85 },
+        { id: '5', name: 'Transaction T1', labels: ['Transaction'] },
+      ]
+      const mockLinks: Link[] = [
+        { source: '1', target: '2', type: 'SUPPLIED_BY' },
+        { source: '3', target: '1', type: 'OWNS' },
+        { source: '1', target: '4', type: 'CONNECTED_TO' },
+        { source: '1', target: '5', type: 'INVOLVES' },
+        { source: '2', target: '5', type: 'INVOLVES' },
+      ]
+      setAllNodes(mockNodes)
+      setAllLinks(mockLinks)
+    } catch (error) {
+      console.error('Failed to load graph:', error)
+    } finally {
+      setLoading(false)
+    }
   }, [])
+
+  // Define loadSubgraph before useEffect so it's available
+  const loadSubgraph = useCallback(async (nodeId: string, maxHops: number) => {
+    setLoading(true)
+    try {
+      const response = await axios.get(`/api/v1/graph/subgraph/${nodeId}`, {
+        params: { max_hops: maxHops, format: 'visualization' },
+      })
+      
+      const subgraph = response.data
+      console.log('Subgraph response:', subgraph)
+      
+      // Visualization format returns 'edges' not 'relationships'
+      const edges = subgraph.edges || subgraph.relationships || []
+      
+      const nodes: Node[] = (subgraph.nodes || []).map((n: any) => {
+        // Handle null riskScore values
+        const riskScore = n.riskScore ?? n.properties?.risk_score ?? n.properties?.riskScore
+        return {
+          id: String(n.id),
+          name: n.label || n.properties?.name || n.id,
+          labels: Array.isArray(n.labels) ? n.labels : (n.labels ? [n.labels] : []),
+          riskScore: riskScore !== null && riskScore !== undefined ? Number(riskScore) : undefined,
+          properties: n.properties || {},
+        }
+      })
+      
+      const links: Link[] = edges.map((r: any) => ({
+        source: String(r.source || r.from || r.from_id),
+        target: String(r.target || r.to || r.to_id),
+        type: r.type || '',
+      }))
+      
+      console.log('Transformed nodes:', nodes)
+      console.log('Transformed links:', links)
+      console.log('Node count:', nodes.length, 'Link count:', links.length)
+      
+      // Debug: Check links connected to the requested center node
+      const centerLinks = links.filter(link => {
+        return link.source === nodeId || link.target === nodeId
+      })
+      console.log(`Links connected to ${nodeId}:`, centerLinks.length)
+      console.log('Sample center links:', centerLinks.slice(0, 5))
+      
+      if (nodes.length === 0) {
+        console.warn('No nodes found in subgraph response')
+        console.warn('Raw subgraph data:', JSON.stringify(subgraph, null, 2))
+      }
+      
+      // Set center node ID - use the requested nodeId if it exists in nodes, otherwise use first node
+      let centerId = nodeId
+      if (centerId && !nodes.find(n => n.id === centerId)) {
+        // Requested center node not found, use first node
+        centerId = nodes[0]?.id || null
+      } else if (!centerId) {
+        centerId = nodes[0]?.id || null
+      }
+      setCenterNodeId(centerId)
+      
+      // Reset focus when loading new subgraph
+      setFocusedNode(null)
+      
+      // Reset camera distance when loading new subgraph
+      setCameraDistance(400)
+      
+      // Extract unique relationship types from links
+      const relTypes = Array.from(new Set(links.map(link => link.type).filter(Boolean)))
+      setAvailableRelationshipTypes(relTypes)
+      
+      // Debug: Log what we received
+      console.log('Loaded subgraph:', {
+        centerNodeId: centerId,
+        totalNodes: nodes.length,
+        totalLinks: links.length,
+        centerNodeLinks: links.filter(link => {
+          const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+          const targetId = typeof link.target === 'string' ? link.target : link.target.id
+          return sourceId === centerId || targetId === centerId
+        }).length,
+        sampleLinks: links.slice(0, 5).map(link => ({
+          source: typeof link.source === 'string' ? link.source : link.source.id,
+          target: typeof link.target === 'string' ? link.target : link.target.id,
+          type: link.type
+        }))
+      })
+      
+      // Set nodes and links - this will trigger the useEffect to recalculate degrees and apply filters
+      setAllNodes(nodes)
+      setAllLinks(links)
+    } catch (error: any) {
+      console.error('Failed to load subgraph:', error)
+      console.error('Error details:', error.response?.data || error.message)
+      // Fallback to loading mock data if subgraph load fails
+      loadGraphData()
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    // Check for node parameter in URL
+    const nodeParam = searchParams.get('node')
+    if (nodeParam) {
+      // Auto-load the node subgraph
+      console.log('Loading node from URL parameter:', nodeParam)
+      loadSubgraph(nodeParam, 2)
+    } else {
+      // Only load mock data if no node parameter
+      loadGraphData()
+    }
+  }, [searchParams, loadSubgraph, loadGraphData])
 
   // Update graph dimensions when container resizes
   useEffect(() => {
@@ -231,131 +370,7 @@ export default function GraphExplorerPage() {
     setDisplayLinks(resolvedLinks)
   }, [allNodes, allLinks, filters, centerNodeId, nodeHopDistances, focusedNode])
 
-  const loadGraphData = async () => {
-    setLoading(true)
-    try {
-      // Fetch graph data from API
-      // For now, using mock data structure
-      // Replace with actual API call: /api/v1/graph/subgraph/{node_id}
-      const mockNodes: Node[] = [
-        { id: '1', name: 'Business A', labels: ['Business'], riskScore: 75 },
-        { id: '2', name: 'Business B', labels: ['Business'], riskScore: 45 },
-        { id: '3', name: 'Person X', labels: ['Person'] },
-        { id: '4', name: 'Business C', labels: ['Business'], riskScore: 85 },
-        { id: '5', name: 'Transaction T1', labels: ['Transaction'] },
-      ]
-      const mockLinks: Link[] = [
-        { source: '1', target: '2', type: 'SUPPLIED_BY' },
-        { source: '3', target: '1', type: 'OWNS' },
-        { source: '1', target: '4', type: 'CONNECTED_TO' },
-        { source: '1', target: '5', type: 'INVOLVES' },
-        { source: '2', target: '5', type: 'INVOLVES' },
-      ]
-      setAllNodes(mockNodes)
-      setAllLinks(mockLinks)
-    } catch (error) {
-      console.error('Failed to load graph:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
-  const loadSubgraph = async (nodeId: string, maxHops: number) => {
-    setLoading(true)
-    try {
-      const response = await axios.get(`/api/v1/graph/subgraph/${nodeId}`, {
-        params: { max_hops: maxHops, format: 'visualization' },
-      })
-      
-      const subgraph = response.data
-      console.log('Subgraph response:', subgraph)
-      
-      // Visualization format returns 'edges' not 'relationships'
-      const edges = subgraph.edges || subgraph.relationships || []
-      
-      const nodes: Node[] = (subgraph.nodes || []).map((n: any) => {
-        // Handle null riskScore values
-        const riskScore = n.riskScore ?? n.properties?.risk_score ?? n.properties?.riskScore
-        return {
-        id: String(n.id),
-          name: n.label || n.properties?.name || n.id,
-          labels: Array.isArray(n.labels) ? n.labels : (n.labels ? [n.labels] : []),
-          riskScore: riskScore !== null && riskScore !== undefined ? Number(riskScore) : undefined,
-          properties: n.properties || {},
-        }
-      })
-      
-      const links: Link[] = edges.map((r: any) => ({
-        source: String(r.source || r.from || r.from_id),
-        target: String(r.target || r.to || r.to_id),
-        type: r.type || '',
-      }))
-      
-      console.log('Transformed nodes:', nodes)
-      console.log('Transformed links:', links)
-      console.log('Node count:', nodes.length, 'Link count:', links.length)
-      
-      // Debug: Check links connected to the requested center node
-      const centerLinks = links.filter(link => {
-        return link.source === nodeId || link.target === nodeId
-      })
-      console.log(`Links connected to ${nodeId}:`, centerLinks.length)
-      console.log('Sample center links:', centerLinks.slice(0, 5))
-      
-      if (nodes.length === 0) {
-        console.warn('No nodes found in subgraph response')
-        console.warn('Raw subgraph data:', JSON.stringify(subgraph, null, 2))
-      }
-      
-      // Set center node ID - use the requested nodeId if it exists in nodes, otherwise use first node
-      let centerId = nodeId
-      if (centerId && !nodes.find(n => n.id === centerId)) {
-        // Requested center node not found, use first node
-        centerId = nodes[0]?.id || null
-      } else if (!centerId) {
-        centerId = nodes[0]?.id || null
-      }
-      setCenterNodeId(centerId)
-      
-      // Reset focus when loading new subgraph
-      setFocusedNode(null)
-      
-      // Reset camera distance when loading new subgraph
-      setCameraDistance(400)
-      
-      // Extract unique relationship types from links
-      const relTypes = Array.from(new Set(links.map(link => link.type).filter(Boolean)))
-      setAvailableRelationshipTypes(relTypes)
-      
-      // Debug: Log what we received
-      console.log('Loaded subgraph:', {
-        centerNodeId: centerId,
-        totalNodes: nodes.length,
-        totalLinks: links.length,
-        centerNodeLinks: links.filter(link => {
-          const sourceId = typeof link.source === 'string' ? link.source : link.source.id
-          const targetId = typeof link.target === 'string' ? link.target : link.target.id
-          return sourceId === centerId || targetId === centerId
-        }).length,
-        sampleLinks: links.slice(0, 5).map(link => ({
-          source: typeof link.source === 'string' ? link.source : link.source.id,
-          target: typeof link.target === 'string' ? link.target : link.target.id,
-          type: link.type
-        }))
-      })
-      
-      // Set nodes and links - this will trigger the useEffect to recalculate degrees and apply filters
-      setAllNodes(nodes)
-      setAllLinks(links)
-    } catch (error: any) {
-      console.error('Failed to load subgraph:', error)
-      console.error('Error details:', error.response?.data || error.message)
-      // Error notification will be handled by the notification system if needed
-      loadGraphData()
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const graphContainerRef = useRef<HTMLDivElement>(null)
 

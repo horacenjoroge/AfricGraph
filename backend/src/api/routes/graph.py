@@ -307,3 +307,116 @@ def get_node_details(node_id: str) -> dict:
         "owner_count": len(owners),
         "connection_count": len(connections),
     }
+
+
+@router.get("/transactions")
+def list_transactions(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    search: Optional[str] = Query(None),
+    transaction_type: Optional[str] = Query(None),
+) -> dict:
+    """List all transactions with pagination and optional filters."""
+    from src.infrastructure.database.neo4j_client import neo4j_client
+    
+    conditions = []
+    params = {"limit": limit, "offset": offset}
+    
+    if search:
+        conditions.append("(t.description CONTAINS $search OR t.id CONTAINS $search)")
+        params["search"] = search
+    if transaction_type:
+        conditions.append("t.type = $transaction_type")
+        params["transaction_type"] = transaction_type
+    
+    where_clause = " AND ".join(conditions) if conditions else "1=1"
+    
+    # Get total count
+    count_query = f"MATCH (t:Transaction) WHERE {where_clause} RETURN count(t) as total"
+    count_rows = neo4j_client.execute_cypher(count_query, params)
+    total = count_rows[0]["total"] if count_rows else 0
+    
+    # Get transactions
+    query = f"""
+    MATCH (t:Transaction)
+    WHERE {where_clause}
+    OPTIONAL MATCH (t)-[:INVOLVES]->(p:Person)
+    RETURN t, collect(DISTINCT {{id: p.id, name: p.name}}) as people
+    ORDER BY t.date DESC, t.id ASC
+    SKIP $offset LIMIT $limit
+    """
+    rows = neo4j_client.execute_cypher(query, params)
+    
+    transactions = []
+    for row in rows:
+        tx_props = dict(row["t"])
+        transactions.append({
+            "id": tx_props.get("id", ""),
+            "amount": tx_props.get("amount"),
+            "currency": tx_props.get("currency", "KES"),
+            "date": tx_props.get("date"),
+            "type": tx_props.get("type"),
+            "description": tx_props.get("description", ""),
+            "source_provider": tx_props.get("source_provider", ""),
+            "people": row.get("people", []),
+            "properties": tx_props,
+        })
+    
+    return {
+        "transactions": transactions,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/people")
+def list_people(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    search: Optional[str] = Query(None),
+) -> dict:
+    """List all people with pagination and optional search."""
+    from src.infrastructure.database.neo4j_client import neo4j_client
+    
+    conditions = []
+    params = {"limit": limit, "offset": offset}
+    
+    if search:
+        conditions.append("(p.name CONTAINS $search OR p.id CONTAINS $search)")
+        params["search"] = search
+    
+    where_clause = " AND ".join(conditions) if conditions else "1=1"
+    
+    # Get total count
+    count_query = f"MATCH (p:Person) WHERE {where_clause} RETURN count(p) as total"
+    count_rows = neo4j_client.execute_cypher(count_query, params)
+    total = count_rows[0]["total"] if count_rows else 0
+    
+    # Get people with transaction counts
+    query = f"""
+    MATCH (p:Person)
+    WHERE {where_clause}
+    OPTIONAL MATCH (p)<-[:INVOLVES]-(t:Transaction)
+    RETURN p, count(DISTINCT t) as transaction_count
+    ORDER BY transaction_count DESC, p.name ASC
+    SKIP $offset LIMIT $limit
+    """
+    rows = neo4j_client.execute_cypher(query, params)
+    
+    people = []
+    for row in rows:
+        person_props = dict(row["p"])
+        people.append({
+            "id": person_props.get("id", ""),
+            "name": person_props.get("name", "Unknown"),
+            "transaction_count": row.get("transaction_count", 0),
+            "properties": person_props,
+        })
+    
+    return {
+        "people": people,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }

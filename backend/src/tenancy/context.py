@@ -3,7 +3,6 @@ from typing import Optional
 from contextvars import ContextVar
 from fastapi import Request, Header
 from src.tenancy.models import Tenant
-from src.tenancy.manager import TenantManager
 from src.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -11,7 +10,16 @@ logger = get_logger(__name__)
 # Context variable for current tenant
 current_tenant: ContextVar[Optional[Tenant]] = ContextVar("current_tenant", default=None)
 
-tenant_manager = TenantManager()
+# Lazy initialization to avoid circular imports
+_tenant_manager = None
+
+def get_tenant_manager():
+    """Get tenant manager instance (lazy initialization)."""
+    global _tenant_manager
+    if _tenant_manager is None:
+        from src.tenancy.manager import TenantManager
+        _tenant_manager = TenantManager()
+    return _tenant_manager
 
 
 def get_current_tenant() -> Optional[Tenant]:
@@ -49,6 +57,7 @@ async def get_tenant_from_request(request: Request) -> Optional[Tenant]:
     
     if tenant_id:
         logger.info("Found X-Tenant-ID header", tenant_id=tenant_id, path=request.url.path)
+        tenant_manager = get_tenant_manager()
         tenant = tenant_manager.get_tenant(tenant_id.strip())  # Strip whitespace
         if tenant:
             if tenant.status == "active":
@@ -67,6 +76,7 @@ async def get_tenant_from_request(request: Request) -> Optional[Tenant]:
         parts = host.split(".")
         if len(parts) >= 3:  # tenant.domain.com
             subdomain = parts[0]
+            tenant_manager = get_tenant_manager()
             tenant = tenant_manager.get_tenant(subdomain)
             if tenant and tenant.status == "active":
                 return tenant

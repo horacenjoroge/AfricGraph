@@ -7,12 +7,62 @@ from src.tenancy.manager import TenantManager
 from src.tenancy.context import set_current_tenant, get_current_tenant
 from src.tenancy.models import Tenant
 from src.infrastructure.database.neo4j_client import neo4j_client
+from src.infrastructure.database.postgres_client import postgres_client
 
 
 @pytest.mark.integration
-@pytest.mark.tenancy
 class TestTenantIsolation:
     """Test tenant data isolation."""
+
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_databases(self):
+        """Set up database connections for the test class."""
+        import os
+        from src.config.settings import settings
+        
+        # In Docker Compose, services are accessible by service name
+        # Override settings if not already set
+        original_postgres_host = settings.postgres_host
+        original_neo4j_uri = settings.neo4j_uri
+        
+        try:
+            # Try to use Docker service names (for running in Docker)
+            # These will work if running inside Docker Compose
+            if os.getenv("TEST_POSTGRES_HOST"):
+                settings.postgres_host = os.getenv("TEST_POSTGRES_HOST")
+            elif settings.postgres_host == "localhost":
+                settings.postgres_host = "postgres"  # Docker service name
+            
+            if os.getenv("TEST_NEO4J_URI"):
+                settings.neo4j_uri = os.getenv("TEST_NEO4J_URI")
+            elif "localhost" in settings.neo4j_uri:
+                settings.neo4j_uri = settings.neo4j_uri.replace("localhost", "neo4j")
+            
+            # Connect to PostgreSQL
+            if not postgres_client.SessionLocal:
+                postgres_client.connect()
+            
+            # Connect to Neo4j
+            if not neo4j_client.driver:
+                neo4j_client.connect()
+            
+            yield
+            
+        except Exception as e:
+            pytest.skip(f"Could not connect to databases: {e}. Make sure PostgreSQL and Neo4j are running.")
+        finally:
+            # Restore original settings
+            settings.postgres_host = original_postgres_host
+            settings.neo4j_uri = original_neo4j_uri
+
+    @pytest.fixture(autouse=True)
+    def cleanup_tenant_context(self):
+        """Clear tenant context before and after each test."""
+        # Clear before test
+        set_current_tenant(None)
+        yield
+        # Clear after test
+        set_current_tenant(None)
 
     @pytest.fixture
     def tenant_manager(self):

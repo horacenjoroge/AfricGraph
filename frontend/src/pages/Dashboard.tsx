@@ -87,6 +87,7 @@ export default function DashboardPage() {
     try {
       // Use the configured api instance which has tenant headers
       // Fetch all data in parallel with tenant header
+      // Note: anomaly/alerts is optional - if it fails, we continue with other data
       const [businessesRes, alertsRes, fraudAlertsRes, transactionsRes] = await Promise.allSettled([
         api.get('/businesses/search', { 
           params: { limit: 1 }
@@ -94,11 +95,13 @@ export default function DashboardPage() {
           console.error('Businesses fetch error:', err.response?.status, err.response?.data, err.message)
           throw err
         }),
+        // Make anomaly alerts optional - don't throw, just log
         api.get('/anomaly/alerts', { 
           params: { limit: 10, severity: 'high' }
         }).catch(err => {
-          console.error('Anomaly alerts fetch error:', err.response?.status, err.response?.data, err.message)
-          throw err
+          console.warn('Anomaly alerts endpoint failed (non-critical):', err.response?.status, err.response?.data?.detail || err.message)
+          // Return empty array instead of throwing
+          return { data: [] }
         }),
         api.get('/fraud/alerts', { 
           params: { limit: 10, status: 'pending' }
@@ -126,9 +129,12 @@ export default function DashboardPage() {
         ? businessesRes.value.data.total || 0 
         : (businessesRes.reason ? console.error('Businesses error:', businessesRes.reason) : 0)
 
+      // Anomaly alerts - handle both array and object responses
       const alertsData = alertsRes.status === 'fulfilled' 
-        ? (alertsRes.value.data.alerts || alertsRes.value.data || [])
-        : (alertsRes.reason ? (console.error('Alerts error:', alertsRes.reason), []) : [])
+        ? (Array.isArray(alertsRes.value.data) 
+            ? alertsRes.value.data 
+            : (alertsRes.value.data?.alerts || []))
+        : []
 
       const fraudAlertsData = fraudAlertsRes.status === 'fulfilled' 
         ? (fraudAlertsRes.value.data.items || fraudAlertsRes.value.data || [])

@@ -25,16 +25,46 @@ export default function TenantSelector() {
   const fetchTenants = async () => {
     setLoading(true)
     try {
-      const response = await axios.get('/tenants')
+      // Try /tenants/available first (works for all users)
+      // Fallback to /tenants if that fails (admin only)
+      let response
+      try {
+        response = await axios.get('/tenants/available')
+      } catch (availableError: any) {
+        // If /available doesn't exist or fails, try admin endpoint
+        if (availableError.response?.status === 404) {
+          response = await axios.get('/tenants')
+        } else {
+          throw availableError
+        }
+      }
+      
       // Backend returns {tenants: [...], total: ...}
       const tenantList = response.data?.tenants || response.data || []
-      setTenants(Array.isArray(tenantList) ? tenantList : [])
-      console.log('Fetched tenants:', tenantList)
+      const tenantsArray = Array.isArray(tenantList) ? tenantList : []
+      setTenants(tenantsArray)
+      
+      console.log('Tenant fetch response:', {
+        fullResponse: response.data,
+        tenants: tenantsArray,
+        total: response.data?.total,
+        count: tenantsArray.length,
+      })
+      
+      if (tenantsArray.length === 0) {
+        console.warn('No tenants found. Full response:', response.data)
+        console.warn('Response status:', response.status)
+      } else {
+        console.log(`Successfully loaded ${tenantsArray.length} tenant(s)`)
+      }
     } catch (error: any) {
       console.error('Failed to fetch tenants:', error)
+      console.error('Error response:', error.response?.data)
       setTenants([])
-      if (error.response?.status !== 404) {
-        showError('Failed to load tenants')
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        showError('You need admin access to view tenants, or no tenants are available')
+      } else if (error.response?.status !== 404) {
+        showError(error.response?.data?.detail || 'Failed to load tenants')
       }
     } finally {
       setLoading(false)
@@ -48,6 +78,11 @@ export default function TenantSelector() {
       const tenant = tenants.find((t) => t.tenant_id === saved)
       if (tenant) {
         setCurrentTenant(tenant)
+        // Set header immediately when loading from localStorage
+        axios.defaults.headers.common['X-Tenant-ID'] = saved
+      } else {
+        // Tenant not found in list, but still set header if ID exists
+        axios.defaults.headers.common['X-Tenant-ID'] = saved
       }
     }
   }

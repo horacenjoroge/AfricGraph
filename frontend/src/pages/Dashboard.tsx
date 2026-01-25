@@ -151,6 +151,28 @@ export default function DashboardPage() {
         totalTransactions,
       })
       
+      // Log full responses for debugging
+      if (businessesRes.status === 'fulfilled') {
+        console.log('Businesses response:', {
+          total: businessesRes.value.data.total,
+          businesses: businessesRes.value.data.businesses?.length || 0,
+          fullData: businessesRes.value.data
+        })
+      }
+      if (transactionsRes.status === 'fulfilled') {
+        console.log('Transactions response:', {
+          total: transactionsRes.value.data.total,
+          transactions: transactionsRes.value.data.transactions?.length || 0,
+          fullData: transactionsRes.value.data
+        })
+      }
+      if (fraudAlertsRes.status === 'fulfilled') {
+        console.log('Fraud alerts response:', {
+          items: fraudAlertsRes.value.data.items?.length || 0,
+          fullData: fraudAlertsRes.value.data
+        })
+      }
+      
       // Store debug info
       setDebugInfo({
         tenantId,
@@ -244,6 +266,15 @@ export default function DashboardPage() {
       ])
 
       setRecentAlerts(allAlerts)
+      
+      // Show warning if all data is zero
+      if (totalBusinesses === 0 && totalTransactions === 0 && allAlerts.length === 0) {
+        console.warn('⚠️ All dashboard data is zero. This could mean:')
+        console.warn('  1. Tenant has no data yet')
+        console.warn('  2. Tenant context not properly set in backend')
+        console.warn('  3. API endpoints are not tenant-aware')
+        console.warn('  Tenant ID:', tenantId)
+      }
     } catch (error: any) {
       console.error('Failed to fetch dashboard data:', error)
       console.error('Error details:', {
@@ -277,6 +308,26 @@ export default function DashboardPage() {
               <div className="text-yellow-400 font-mono font-semibold mb-1">No Tenant Selected</div>
               <div className="text-gray-400 text-sm">
                 Select a tenant from the dropdown in the top-right corner to view your data.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {tenantId && kpis.length > 0 && kpis.every(k => k.value === '0' || k.value === 0 || k.value === 'N/A') && !loading && (
+        <div className="glass-panel border border-blue-500/30 bg-blue-500/10 p-4 rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="text-blue-400 text-xl">ℹ️</div>
+            <div>
+              <div className="text-blue-400 font-mono font-semibold mb-1">No Data Found</div>
+              <div className="text-gray-400 text-sm">
+                Tenant <span className="font-mono text-cyan-400">{tenantId}</span> has no data yet.
+                <br />
+                Create businesses, transactions, or other entities to see them here.
+                <br />
+                <span className="text-xs text-gray-500 mt-2 block">
+                  Check the debug panel above for API response details.
+                </span>
               </div>
             </div>
           </div>

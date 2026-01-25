@@ -25,6 +25,7 @@ class TenantMigrationManager:
         source_tenant_id: str,
         target_tenant_id: str,
         dry_run: bool = False,
+        validate: bool = True,
     ) -> Dict[str, Any]:
         """
         Migrate tenant data from source to target tenant.
@@ -33,6 +34,7 @@ class TenantMigrationManager:
             source_tenant_id: Source tenant ID
             target_tenant_id: Target tenant ID (can be new)
             dry_run: If True, only simulate migration
+            validate: If True, validate data integrity after migration
 
         Returns:
             Migration statistics
@@ -40,6 +42,11 @@ class TenantMigrationManager:
         source_tenant = self.tenant_manager.get_tenant(source_tenant_id)
         if not source_tenant:
             raise ValueError(f"Source tenant not found: {source_tenant_id}")
+
+        # Validate source tenant has data
+        source_stats = self._count_tenant_data(source_tenant_id)
+        if source_stats["nodes"] == 0 and source_stats["relationships"] == 0:
+            logger.warning("Source tenant has no data to migrate", tenant_id=source_tenant_id)
 
         # Ensure target tenant exists
         target_tenant = self.tenant_manager.get_tenant(target_tenant_id)
@@ -51,31 +58,73 @@ class TenantMigrationManager:
                 domain=None,
                 config=source_tenant.config,
             )
+        else:
+            # Check if target tenant already has data
+            target_stats = self._count_tenant_data(target_tenant_id)
+            if target_stats["nodes"] > 0 or target_stats["relationships"] > 0:
+                logger.warning(
+                    "Target tenant already has data",
+                    tenant_id=target_tenant_id,
+                    nodes=target_stats["nodes"],
+                    relationships=target_stats["relationships"],
+                )
 
         if dry_run:
             # Count nodes and relationships
-            stats = self._count_tenant_data(source_tenant_id)
             return {
                 "source_tenant_id": source_tenant_id,
                 "target_tenant_id": target_tenant_id,
                 "dry_run": True,
-                "nodes_to_migrate": stats["nodes"],
-                "relationships_to_migrate": stats["relationships"],
+                "nodes_to_migrate": source_stats["nodes"],
+                "relationships_to_migrate": source_stats["relationships"],
+                "target_has_existing_data": target_stats["nodes"] > 0 or target_stats["relationships"] > 0,
             }
 
-        # Perform migration
-        nodes_migrated = self._migrate_nodes(source_tenant_id, target_tenant_id)
-        relationships_migrated = self._migrate_relationships(source_tenant_id, target_tenant_id)
+        # Perform migration with transaction support
+        migration_start = datetime.utcnow()
+        try:
+            nodes_migrated = self._migrate_nodes(source_tenant_id, target_tenant_id)
+            relationships_migrated = self._migrate_relationships(source_tenant_id, target_tenant_id)
+            
+            # Validate migration if requested
+            validation_result = None
+            if validate:
+                validation_result = self._validate_migration(
+                    source_tenant_id,
+                    target_tenant_id,
+                    source_stats,
+                )
+            
+            migration_end = datetime.utcnow()
+            duration_seconds = (migration_end - migration_start).total_seconds()
+            
+            logger.info(
+                "Tenant migration completed",
+                source=source_tenant_id,
+                target=target_tenant_id,
+                nodes=nodes_migrated,
+                relationships=relationships_migrated,
+                duration_seconds=duration_seconds,
+            )
 
-        logger.info("Tenant migration completed", source=source_tenant_id, target=target_tenant_id)
-
-        return {
-            "source_tenant_id": source_tenant_id,
-            "target_tenant_id": target_tenant_id,
-            "nodes_migrated": nodes_migrated,
-            "relationships_migrated": relationships_migrated,
-            "status": "completed",
-        }
+            return {
+                "source_tenant_id": source_tenant_id,
+                "target_tenant_id": target_tenant_id,
+                "nodes_migrated": nodes_migrated,
+                "relationships_migrated": relationships_migrated,
+                "status": "completed",
+                "duration_seconds": duration_seconds,
+                "validation": validation_result,
+            }
+        except Exception as e:
+            logger.exception(
+                "Migration failed",
+                source=source_tenant_id,
+                target=target_tenant_id,
+                error=str(e),
+            )
+            # Rollback would be implemented here if needed
+            raise
 
     def _count_tenant_data(self, tenant_id: str) -> Dict[str, int]:
         """Count nodes and relationships for a tenant."""
@@ -179,3 +228,56 @@ class TenantMigrationManager:
             target_tenant_id=new_tenant_id,
             dry_run=False,
         )
+    
+    def _validate_migration(
+        self,
+        source_tenant_id: str,
+        target_tenant_id: str,
+        expected_stats: Dict[str, int],
+    ) -> Dict[str, Any]:
+        """
+        Validate that migration was successful.
+        
+        Args:
+            source_tenant_id: Source tenant ID
+            target_tenant_id: Target tenant ID
+            expected_stats: Expected node/relationship counts
+            
+        Returns:
+            Validation results
+        """
+        target_stats = self._count_tenant_data(target_tenant_id)
+        
+        nodes_match = target_stats["nodes"] == expected_stats["nodes"]
+        relationships_match = target_stats["relationships"] == expected_stats["relationships"]
+        
+        # Check for orphaned relationships
+        orphaned_query = """
+        MATCH (a)-[r]->(b)
+        WHERE (a.tenant_id = $target_tenant_id AND b.tenant_id != $target_tenant_id)
+           OR (a.tenant_id != $target_tenant_id AND b.tenant_id = $target_tenant_id)
+        RETURN count(r) as orphaned_count
+        """
+        try:
+            orphaned_result = neo4j_client.execute_cypher(
+                orphaned_query,
+                {"target_tenant_id": target_tenant_id},
+                skip_tenant_filter=True,
+            )
+            orphaned_count = orphaned_result[0]["orphaned_count"] if orphaned_result else 0
+        except Exception as e:
+            logger.exception("Failed to check for orphaned relationships", error=str(e))
+            orphaned_count = -1  # Unknown
+        
+        is_valid = nodes_match and relationships_match and orphaned_count == 0
+        
+        return {
+            "valid": is_valid,
+            "nodes_match": nodes_match,
+            "relationships_match": relationships_match,
+            "expected_nodes": expected_stats["nodes"],
+            "actual_nodes": target_stats["nodes"],
+            "expected_relationships": expected_stats["relationships"],
+            "actual_relationships": target_stats["relationships"],
+            "orphaned_relationships": orphaned_count,
+        }

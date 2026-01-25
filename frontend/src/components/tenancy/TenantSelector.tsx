@@ -118,7 +118,22 @@ export default function TenantSelector() {
 
   useEffect(() => {
     if (tenants.length > 0 && !currentTenant) {
-      loadCurrentTenant()
+      // Auto-select first tenant if none is selected
+      const saved = localStorage.getItem('current_tenant_id')
+      if (!saved && tenants.length > 0) {
+        // Auto-select the first available tenant
+        const firstTenant = tenants[0]
+        localStorage.setItem('current_tenant_id', firstTenant.tenant_id)
+        axios.defaults.headers.common['X-Tenant-ID'] = firstTenant.tenant_id
+        setCurrentTenant(firstTenant)
+        console.log('Auto-selected first tenant:', firstTenant.tenant_id)
+        // Reload page to refresh all data with new tenant context
+        setTimeout(() => {
+          window.location.reload()
+        }, 500)
+      } else {
+        loadCurrentTenant()
+      }
     }
   }, [tenants])
 

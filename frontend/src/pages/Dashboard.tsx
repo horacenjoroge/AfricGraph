@@ -43,13 +43,61 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     setLoading(true)
+    
+    // Check if tenant is selected
+    const tenantId = localStorage.getItem('current_tenant_id')
+    if (!tenantId) {
+      console.warn('No tenant selected - data may not be visible')
+      setKpis([
+        { 
+          label: 'Total Businesses', 
+          value: '0', 
+          change: undefined,
+          color: 'cyan' 
+        },
+        { 
+          label: 'High Risk', 
+          value: '0', 
+          change: undefined,
+          color: 'red' 
+        },
+        { 
+          label: 'Total Transactions', 
+          value: '0', 
+          change: undefined,
+          color: 'blue' 
+        },
+        { 
+          label: 'Active Alerts', 
+          value: '0', 
+          change: undefined,
+          color: 'purple' 
+        },
+      ])
+      setRecentAlerts([])
+      setLoading(false)
+      return
+    }
+    
     try {
-      // Fetch all data in parallel
+      // Fetch all data in parallel with tenant header
       const [businessesRes, alertsRes, fraudAlertsRes, transactionsRes] = await Promise.allSettled([
-        axios.get('/api/v1/businesses/search', { params: { limit: 1 } }),
-        axios.get('/alerts', { params: { limit: 10, status: 'active' } }),
-        axios.get('/api/v1/fraud/alerts', { params: { limit: 10, status: 'pending' } }),
-        axios.get('/api/v1/graph/transactions', { params: { limit: 1 } }),
+        axios.get('/api/v1/businesses/search', { 
+          params: { limit: 1 },
+          headers: { 'X-Tenant-ID': tenantId }
+        }),
+        axios.get('/alerts', { 
+          params: { limit: 10, status: 'active' },
+          headers: { 'X-Tenant-ID': tenantId }
+        }),
+        axios.get('/api/v1/fraud/alerts', { 
+          params: { limit: 10, status: 'pending' },
+          headers: { 'X-Tenant-ID': tenantId }
+        }),
+        axios.get('/api/v1/graph/transactions', { 
+          params: { limit: 1 },
+          headers: { 'X-Tenant-ID': tenantId }
+        }),
       ])
 
       // Extract data from responses
@@ -150,8 +198,24 @@ export default function DashboardPage() {
     }
   }
 
+  const tenantId = localStorage.getItem('current_tenant_id')
+
   return (
     <div className="space-y-6">
+      {!tenantId && (
+        <div className="glass-panel border border-yellow-500/30 bg-yellow-500/10 p-4 rounded-lg">
+          <div className="flex items-center gap-3">
+            <div className="text-yellow-400 text-xl">⚠️</div>
+            <div>
+              <div className="text-yellow-400 font-mono font-semibold mb-1">No Tenant Selected</div>
+              <div className="text-gray-400 text-sm">
+                Select a tenant from the dropdown in the top-right corner to view your data.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-4xl font-bold font-mono mb-2 text-glow-cyan tracking-tight">

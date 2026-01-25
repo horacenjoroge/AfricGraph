@@ -31,7 +31,16 @@ export default function BusinessSearchPage() {
   const fetchBusinessesSilent = async () => {
     setLoading(true)
     try {
-      const response = await axios.get(`/api/v1/businesses/search`)
+      const tenantId = localStorage.getItem('current_tenant_id')
+      if (!tenantId) {
+        console.warn('No tenant selected - businesses may not be visible')
+        setBusinesses([])
+        return
+      }
+      
+      const response = await axios.get(`/api/v1/businesses/search`, {
+        headers: { 'X-Tenant-ID': tenantId }
+      })
       const businesses = response.data.businesses || []
       setBusinesses(businesses)
     } catch (error: any) {
@@ -51,11 +60,20 @@ export default function BusinessSearchPage() {
 
     setLoading(true)
     try {
+      const tenantId = localStorage.getItem('current_tenant_id')
+      if (!tenantId) {
+        showError('Please select a tenant to search businesses')
+        setBusinesses([])
+        return
+      }
+      
       const params = new URLSearchParams()
       if (searchQuery) params.append('query', searchQuery)
       if (sectorFilter) params.append('sector', sectorFilter)
       
-      const response = await axios.get(`/api/v1/businesses/search?${params}`)
+      const response = await axios.get(`/api/v1/businesses/search?${params}`, {
+        headers: { 'X-Tenant-ID': tenantId }
+      })
       const businesses = response.data.businesses || []
       setBusinesses(businesses)
       

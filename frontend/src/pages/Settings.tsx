@@ -3,8 +3,9 @@ import { motion } from 'framer-motion'
 import UserProfile from '../components/settings/UserProfile'
 import Preferences from '../components/settings/Preferences'
 import TenantInfo from '../components/settings/TenantInfo'
+import TenantPerformanceDashboard from '../components/tenancy/TenantPerformanceDashboard'
 
-type TabType = 'profile' | 'preferences' | 'tenant'
+type TabType = 'profile' | 'preferences' | 'tenant' | 'analytics'
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('profile')
@@ -13,6 +14,7 @@ export default function SettingsPage() {
     { id: 'profile', label: 'Profile' },
     { id: 'preferences', label: 'Preferences' },
     { id: 'tenant', label: 'Tenant' },
+    { id: 'analytics', label: 'Performance' },
   ]
 
   return (
@@ -49,6 +51,7 @@ export default function SettingsPage() {
           {activeTab === 'profile' && <UserProfile />}
           {activeTab === 'preferences' && <Preferences />}
           {activeTab === 'tenant' && <TenantInfo />}
+          {activeTab === 'analytics' && <TenantPerformanceDashboard />}
         </motion.div>
       </div>
     </div>

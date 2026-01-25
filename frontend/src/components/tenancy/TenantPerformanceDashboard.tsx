@@ -144,9 +144,17 @@ export default function TenantPerformanceDashboard() {
 
   if (!currentTenantId) {
     return (
-      <div className="text-center py-12 text-gray-400">
-        <p>No tenant selected</p>
-        <p className="text-sm mt-2">Please select a tenant to view performance metrics</p>
+      <div className="space-y-4">
+        <div className="glass-panel border border-yellow-500/30 bg-yellow-500/10 p-6 rounded-lg text-center">
+          <div className="text-yellow-400 text-4xl mb-4">⚠️</div>
+          <p className="text-xl font-mono font-semibold text-yellow-400 mb-2">No Tenant Selected</p>
+          <p className="text-gray-400 text-sm mb-4">
+            Please select a tenant from the dropdown in the top-right corner to view performance metrics.
+          </p>
+          <p className="text-gray-500 text-xs font-mono">
+            Once a tenant is selected, you'll see health status, usage metrics, and resource quotas.
+          </p>
+        </div>
       </div>
     )
   }

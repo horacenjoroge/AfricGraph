@@ -37,6 +37,17 @@ def search_businesses_endpoint(
     offset: int = Query(0, ge=0),
 ) -> BusinessSearchResponse:
     """Search businesses."""
+    # Debug: Check tenant context
+    from src.tenancy.context import get_current_tenant
+    tenant = get_current_tenant()
+    from src.infrastructure.logging import get_logger
+    logger = get_logger(__name__)
+    logger.info(
+        "Business search endpoint called",
+        has_tenant=tenant is not None,
+        tenant_id=tenant.tenant_id if tenant else None,
+    )
+    
     businesses, total = search_businesses(query=query, sector=sector, limit=limit, offset=offset)
     return BusinessSearchResponse(
         businesses=[BusinessResponse.model_validate(b) for b in businesses],

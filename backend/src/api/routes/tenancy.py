@@ -391,3 +391,110 @@ def debug_tenant_context() -> dict:
         "tenant_name": tenant.name if tenant else None,
         "tenant_status": tenant.status if tenant else None,
     }
+
+
+@router.post("/indexes/ensure", response_model=dict)
+def ensure_tenant_indexes(
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Ensure all tenant isolation indexes exist. Requires admin role."""
+    try:
+        from src.tenancy.indexes import ensure_tenant_indexes
+        results = ensure_tenant_indexes()
+        logger.info("Tenant indexes ensured", results=results)
+        return results
+    except Exception as e:
+        logger.exception("Failed to ensure indexes", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to ensure indexes: {str(e)}")
+
+
+@router.get("/indexes/status", response_model=dict)
+def get_index_status(
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Get status of tenant-related indexes. Requires admin role."""
+    try:
+        from src.tenancy.indexes import get_index_status
+        return get_index_status()
+    except Exception as e:
+        logger.exception("Failed to get index status", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to get index status: {str(e)}")
+
+
+@router.get("/analytics/distribution", response_model=dict)
+def get_tenant_distribution(
+    metric: str = Query("nodes", description="Metric: nodes or relationships"),
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Get tenant distribution by metric. Requires admin role."""
+    try:
+        anl = get_analytics()
+        return anl.get_tenant_distribution(metric=metric)
+    except Exception as e:
+        logger.exception("Failed to get tenant distribution", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to get distribution: {str(e)}")
+
+
+@router.get("/analytics/activity", response_model=dict)
+def get_activity_summary(
+    days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Get aggregated activity summary. Requires admin role."""
+    try:
+        anl = get_analytics()
+        return anl.get_activity_summary(days=days)
+    except Exception as e:
+        logger.exception("Failed to get activity summary", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to get activity: {str(e)}")
+
+
+@router.get("/{tenant_id}/health", response_model=dict)
+def get_tenant_health(
+    tenant_id: str,
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Get health metrics for a tenant. Requires admin role."""
+    try:
+        from src.tenancy.monitoring import TenantMonitoring
+        monitoring = TenantMonitoring()
+        return monitoring.get_tenant_health(tenant_id)
+    except Exception as e:
+        logger.exception("Failed to get tenant health", tenant_id=tenant_id, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to get health: {str(e)}")
+
+
+@router.get("/{tenant_id}/usage", response_model=dict)
+def get_tenant_usage(
+    tenant_id: str,
+    days: int = Query(30, ge=1, le=365),
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Get resource usage for a tenant. Requires admin role."""
+    try:
+        from src.tenancy.monitoring import TenantMonitoring
+        monitoring = TenantMonitoring()
+        return monitoring.get_tenant_resource_usage(tenant_id, days=days)
+    except Exception as e:
+        logger.exception("Failed to get tenant usage", tenant_id=tenant_id, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to get usage: {str(e)}")
+
+
+@router.get("/health/all", response_model=dict)
+def get_all_tenants_health(
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Get health status for all tenants. Requires admin role."""
+    try:
+        from src.tenancy.monitoring import TenantMonitoring
+        monitoring = TenantMonitoring()
+        health_statuses = monitoring.get_all_tenants_health()
+        return {
+            "total_tenants": len(health_statuses),
+            "healthy_tenants": sum(1 for h in health_statuses if h.get("healthy", False)),
+            "unhealthy_tenants": sum(1 for h in health_statuses if not h.get("healthy", False)),
+            "tenants": health_statuses,
+        }
+    except Exception as e:
+        logger.exception("Failed to get all tenants health", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to get health: {str(e)}")

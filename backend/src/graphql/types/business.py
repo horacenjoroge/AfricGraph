@@ -1,5 +1,6 @@
 """Business GraphQL types."""
 import strawberry
+from strawberry.types import Info
 from typing import Optional, List
 
 from src.domain.models.business import Business
@@ -17,7 +18,7 @@ class BusinessType:
     sector: Optional[str] = None
 
     @strawberry.field
-    def owners(self, info: strawberry.Info) -> List[PersonType]:
+    def owners(self, info: Info) -> List[PersonType]:
         """Get business owners (nested relationship)."""
         from src.infrastructure.database.neo4j_client import neo4j_client
         from src.domain.models.person import Person
@@ -34,7 +35,7 @@ class BusinessType:
         return owners
 
     @strawberry.field
-    def transactions(self, info: strawberry.Info, limit: int = 50) -> List[TransactionType]:
+    def transactions(self, info: Info, limit: int = 50) -> List[TransactionType]:
         """Get business transactions (nested relationship)."""
         from src.infrastructure.database.neo4j_client import neo4j_client
         from src.domain.models.transaction import Transaction
@@ -53,7 +54,7 @@ class BusinessType:
         return transactions
 
     @strawberry.field
-    def suppliers(self, info: strawberry.Info) -> List["BusinessType"]:
+    def suppliers(self, info: Info) -> List["BusinessType"]:
         """Get supplier businesses (nested relationship)."""
         from src.infrastructure.database.neo4j_client import neo4j_client
         from src.domain.models.business import Business

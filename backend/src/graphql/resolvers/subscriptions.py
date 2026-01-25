@@ -1,5 +1,6 @@
 """GraphQL subscription resolvers for real-time updates."""
 import strawberry
+from strawberry.types import Info
 from typing import AsyncIterator
 import asyncio
 
@@ -15,7 +16,7 @@ class Subscription:
     async def business_updates(
         self,
         business_id: str,
-        info: strawberry.Info,
+        info: Info,
     ) -> AsyncIterator[BusinessType]:
         """Subscribe to business updates."""
         context: GraphQLContext = info.context
@@ -40,7 +41,7 @@ class Subscription:
     async def risk_score_updates(
         self,
         business_id: str,
-        info: strawberry.Info,
+        info: Info,
     ) -> AsyncIterator[float]:
         """Subscribe to risk score updates for a business."""
         context: GraphQLContext = info.context

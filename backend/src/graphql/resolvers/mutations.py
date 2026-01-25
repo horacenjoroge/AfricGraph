@@ -1,6 +1,7 @@
 """GraphQL mutation resolvers."""
 from typing import Optional
 import strawberry
+from strawberry.types import Info
 
 from src.api.services.business import create_business, update_business
 from src.domain.models.business import Business
@@ -35,7 +36,7 @@ class Mutation:
     def create_business(
         self,
         input: BusinessCreateInput,
-        info: strawberry.Info,
+        info: Info,
     ) -> BusinessType:
         """Create a new business."""
         context: GraphQLContext = info.context
@@ -57,7 +58,7 @@ class Mutation:
         self,
         business_id: str,
         input: BusinessUpdateInput,
-        info: strawberry.Info,
+        info: Info,
     ) -> Optional[BusinessType]:
         """Update a business."""
         context: GraphQLContext = info.context

@@ -1,6 +1,7 @@
 """GraphQL query resolvers."""
 from typing import List, Optional
 import strawberry
+from strawberry.types import Info
 
 from src.api.services.business import get_business, search_businesses
 from src.graphql.resolvers.context import GraphQLContext
@@ -12,7 +13,7 @@ class Query:
     """GraphQL query root."""
 
     @strawberry.field
-    def business(self, id: str, info: strawberry.Info) -> Optional[BusinessType]:
+    def business(self, id: str, info: Info) -> Optional[BusinessType]:
         """Get business by ID."""
         context: GraphQLContext = info.context
         # Check permission
@@ -31,7 +32,7 @@ class Query:
         sector: Optional[str] = None,
         limit: int = 20,
         offset: int = 0,
-        info: strawberry.Info = strawberry.UNSET,
+        info: Info = strawberry.UNSET,
     ) -> List[BusinessType]:
         """Search businesses."""
         context: GraphQLContext = info.context if info != strawberry.UNSET else None

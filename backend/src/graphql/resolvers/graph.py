@@ -1,6 +1,7 @@
 """Graph traversal query resolvers."""
 from typing import List, Optional
 import strawberry
+from strawberry.types import Info
 
 from src.graph.relationship_search import find_connections
 from src.graph.traversal import extract_subgraph, find_shortest_path
@@ -20,7 +21,7 @@ class GraphQuery:
         entity_a_id: str,
         entity_b_id: str,
         max_depth: int = 5,
-        info: strawberry.Info = None,
+        info: Info = None,
     ) -> List[PathType]:
         """Find connections between two entities."""
         context: GraphQLContext = info.context if info else None
@@ -55,7 +56,7 @@ class GraphQuery:
         self,
         business_id: str,
         max_hops: int = 2,
-        info: strawberry.Info = None,
+        info: Info = None,
     ) -> List[BusinessType]:
         """Get subgraph around a business."""
         context: GraphQLContext = info.context if info else None

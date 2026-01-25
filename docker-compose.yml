@@ -124,7 +124,7 @@ services:
       - JWT_EXPIRATION_HOURS=${JWT_EXPIRATION_HOURS:-24}
       - API_HOST=0.0.0.0
       - API_PORT=8000
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:3000"]}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./backend:/app

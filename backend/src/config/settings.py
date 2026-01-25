@@ -1,10 +1,19 @@
 """Application configuration management."""
-from pydantic_settings import BaseSettings
-from typing import List
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator, model_validator, Field
+from typing import List, Any, Union, Dict
+import json
+import os
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",  # Ignore extra fields from environment
+    )
     
     # Neo4j Configuration
     neo4j_uri: str = "bolt://neo4j:7687"
@@ -43,7 +52,30 @@ class Settings(BaseSettings):
     # API Configuration
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    cors_origins: List[str] = ["http://localhost:3000"]
+    cors_origins: str = "http://localhost:3000"  # Store as string to avoid JSON parsing issues
+    
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Parse CORS origins from string (comma-separated or JSON)."""
+        cors_value = getattr(self, 'cors_origins', 'http://localhost:3000')
+        if not cors_value:
+            return ["http://localhost:3000"]
+        
+        cors_value = cors_value.strip() if isinstance(cors_value, str) else str(cors_value)
+        if not cors_value:
+            return ["http://localhost:3000"]
+        
+        # Try JSON parsing first
+        try:
+            parsed = json.loads(cors_value)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if item]
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass
+        
+        # Treat as comma-separated string
+        origins = [origin.strip() for origin in cors_value.split(",") if origin.strip()]
+        return origins if origins else ["http://localhost:3000"]
     
     # Logging Configuration
     log_level: str = "INFO"
@@ -92,10 +124,7 @@ class Settings(BaseSettings):
     abac_business_hours_start: int = 8
     abac_business_hours_end: int = 18
     abac_timezone: str = "UTC"
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    
 
 
 # Global settings instance

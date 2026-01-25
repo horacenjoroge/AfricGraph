@@ -498,3 +498,162 @@ def get_all_tenants_health(
     except Exception as e:
         logger.exception("Failed to get all tenants health", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to get health: {str(e)}")
+
+
+@router.get("/{tenant_id}/quotas", response_model=dict)
+def get_tenant_quotas(
+    tenant_id: str,
+    user_id: Optional[str] = Depends(get_current_user_id),
+) -> dict:
+    """Get all quotas for a tenant. Users can only view their current tenant's quotas."""
+    try:
+        from src.tenancy.quotas import TenantQuotaManager
+        
+        # Check access
+        if user_id:
+            user = get_user_by_id(user_id)
+            if user and user.role == "admin":
+                # Admins can view any tenant's quotas
+                pass
+            else:
+                # Regular users can only view their current tenant's quotas
+                current_tenant = get_current_tenant()
+                if not current_tenant or current_tenant.tenant_id != tenant_id:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You can only view your current tenant's quotas."
+                    )
+        
+        quota_manager = TenantQuotaManager()
+        quotas = quota_manager.get_all_quotas(tenant_id)
+        
+        return {
+            "tenant_id": tenant_id,
+            "quotas": {
+                quota_type.value: {
+                    "limit": quota.limit,
+                    "current_usage": quota.current_usage,
+                    "remaining": quota.remaining,
+                    "usage_percentage": quota.usage_percentage,
+                    "is_exceeded": quota.is_exceeded,
+                    "period_start": quota.period_start.isoformat() if quota.period_start else None,
+                    "period_end": quota.period_end.isoformat() if quota.period_end else None,
+                }
+                for quota_type, quota in quotas.items()
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to get tenant quotas", tenant_id=tenant_id, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to get quotas: {str(e)}")
+
+
+@router.put("/{tenant_id}/quotas/{quota_type}", response_model=dict)
+def set_quota_limit(
+    tenant_id: str,
+    quota_type: str,
+    limit: int = Query(..., ge=0, description="New quota limit"),
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Set quota limit for a tenant. Requires admin role."""
+    try:
+        from src.tenancy.quotas import TenantQuotaManager, QuotaType
+        
+        try:
+            quota_enum = QuotaType(quota_type)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid quota type: {quota_type}")
+        
+        quota_manager = TenantQuotaManager()
+        quota_manager.set_quota_limit(tenant_id, quota_enum, limit)
+        
+        # Return updated quota
+        quota = quota_manager.get_tenant_quota(tenant_id, quota_enum)
+        return {
+            "tenant_id": tenant_id,
+            "quota_type": quota_type,
+            "limit": quota.limit,
+            "current_usage": quota.current_usage,
+            "remaining": quota.remaining,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to set quota limit", tenant_id=tenant_id, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to set quota: {str(e)}")
+
+
+@router.get("/{tenant_id}/billing/usage", response_model=dict)
+def get_billing_usage(
+    tenant_id: str,
+    user_id: Optional[str] = Depends(get_current_user_id),
+) -> dict:
+    """Get billing usage summary for a tenant."""
+    try:
+        from src.tenancy.billing import TenantBillingManager
+        
+        # Check access
+        if user_id:
+            user = get_user_by_id(user_id)
+            if user and user.role != "admin":
+                current_tenant = get_current_tenant()
+                if not current_tenant or current_tenant.tenant_id != tenant_id:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You can only view your current tenant's billing."
+                    )
+        
+        billing_manager = TenantBillingManager()
+        usage = billing_manager.get_usage_summary(tenant_id)
+        return usage
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to get billing usage", tenant_id=tenant_id, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to get billing usage: {str(e)}")
+
+
+@router.get("/{tenant_id}/billing/calculate", response_model=dict)
+def calculate_bill(
+    tenant_id: str,
+    period_start: Optional[datetime] = Query(None),
+    period_end: Optional[datetime] = Query(None),
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Calculate bill for a tenant. Requires admin role."""
+    try:
+        from src.tenancy.billing import TenantBillingManager
+        
+        billing_manager = TenantBillingManager()
+        bill = billing_manager.calculate_bill(tenant_id, period_start, period_end)
+        return bill
+    except Exception as e:
+        logger.exception("Failed to calculate bill", tenant_id=tenant_id, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to calculate bill: {str(e)}")
+
+
+@router.put("/{tenant_id}/billing/plan", response_model=dict)
+def set_billing_plan(
+    tenant_id: str,
+    plan_id: str = Query(..., description="Billing plan ID"),
+    admin: dict = Depends(require_admin),
+) -> dict:
+    """Set billing plan for a tenant. Requires admin role."""
+    try:
+        from src.tenancy.billing import TenantBillingManager
+        
+        billing_manager = TenantBillingManager()
+        billing_manager.set_tenant_plan(tenant_id, plan_id)
+        
+        plan = billing_manager.get_tenant_plan(tenant_id)
+        return {
+            "tenant_id": tenant_id,
+            "plan_id": plan.plan_id if plan else None,
+            "plan_name": plan.name if plan else None,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Failed to set billing plan", tenant_id=tenant_id, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to set plan: {str(e)}")

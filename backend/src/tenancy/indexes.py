@@ -72,7 +72,9 @@ def ensure_tenant_indexes() -> Dict[str, Any]:
             logger.error(error_msg)
     
     # Create relationship tenant_id indexes (if relationships store tenant_id)
-    for rel_type in RELATIONSHIP_TYPES[:10]:  # Limit to most common types
+    # Convert set to list and limit to first 10 types
+    relationship_types_list = list(RELATIONSHIP_TYPES)[:10]
+    for rel_type in relationship_types_list:
         try:
             index_name = f"tenant_id_rel_{rel_type.lower().replace('_', '')}"
             query = f"""

@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from uuid import uuid4
+import json
 from sqlalchemy import text
 
 from src.infrastructure.database.postgres_client import postgres_client
@@ -79,11 +80,14 @@ class TenantManager:
             domain = EXCLUDED.domain,
             updated_at = EXCLUDED.updated_at
         """
+        # Convert config dict to JSON string for JSONB column
+        config_json = json.dumps(config or {})
+        
         params = {
             "tenant_id": tenant_id,
             "name": name,
             "domain": domain,
-            "config": config or {},
+            "config": config_json,
             "created_at": now,
             "updated_at": now,
         }
@@ -105,13 +109,22 @@ class TenantManager:
             row = result.fetchone()
             if not row:
                 return None
-            row_dict = dict(row)
+            # SQLAlchemy 2.0+ Row objects use _mapping for dict access
+            row_dict = row._mapping if hasattr(row, '_mapping') else dict(row)
+            # Parse config if it's a string (JSONB might return as string in some cases)
+            config = row_dict.get("config") or {}
+            if isinstance(config, str):
+                try:
+                    config = json.loads(config)
+                except (json.JSONDecodeError, TypeError):
+                    config = {}
+            
             return Tenant(
                 tenant_id=row_dict["tenant_id"],
                 name=row_dict["name"],
                 domain=row_dict.get("domain"),
                 status=row_dict["status"],
-                config=row_dict.get("config") or {},
+                config=config,
                 created_at=row_dict["created_at"],
                 updated_at=row_dict["updated_at"],
             )
@@ -141,20 +154,31 @@ class TenantManager:
         
         with postgres_client.get_session() as session:
             result = session.execute(text(query), params)
-            rows = [dict(row) for row in result]
+            # SQLAlchemy 2.0+ Row objects use _mapping for dict access
+            rows = [row._mapping if hasattr(row, '_mapping') else dict(row) for row in result]
         
-        return [
-            Tenant(
-                tenant_id=row["tenant_id"],
-                name=row["name"],
-                domain=row.get("domain"),
-                status=row["status"],
-                config=row.get("config") or {},
-                created_at=row["created_at"],
-                updated_at=row["updated_at"],
+        result_tenants = []
+        for row in rows:
+            # Parse config if it's a string (JSONB might return as string in some cases)
+            config = row.get("config") or {}
+            if isinstance(config, str):
+                try:
+                    config = json.loads(config)
+                except (json.JSONDecodeError, TypeError):
+                    config = {}
+            
+            result_tenants.append(
+                Tenant(
+                    tenant_id=row["tenant_id"],
+                    name=row["name"],
+                    domain=row.get("domain"),
+                    status=row["status"],
+                    config=config,
+                    created_at=row["created_at"],
+                    updated_at=row["updated_at"],
+                )
             )
-            for row in rows
-        ]
+        return result_tenants
 
     def update_tenant(
         self,
@@ -182,7 +206,8 @@ class TenantManager:
 
         if config is not None:
             updates.append("config = :config")
-            params["config"] = config
+            # Convert config dict to JSON string for JSONB column
+            params["config"] = json.dumps(config)
 
         if not updates:
             return self.get_tenant(tenant_id)
@@ -211,6 +236,20 @@ class TenantManager:
         description: Optional[str] = None,
     ) -> TenantConfig:
         """Set tenant-specific configuration."""
+        # Convert value to JSON string for JSONB column
+        # If it's already a string, check if it's valid JSON, otherwise wrap it
+        if isinstance(value, str):
+            # Try to parse it to validate it's JSON
+            try:
+                json.loads(value)
+                value_json = value  # Already valid JSON string
+            except (json.JSONDecodeError, TypeError):
+                # Not valid JSON, treat as plain string and wrap it
+                value_json = json.dumps(value)
+        else:
+            # Convert dict/list/etc to JSON string
+            value_json = json.dumps(value)
+        
         query = """
         INSERT INTO tenant_configs (tenant_id, key, value, description, updated_at)
         VALUES (:tenant_id, :key, :value, :description, NOW())
@@ -222,7 +261,7 @@ class TenantManager:
         params = {
             "tenant_id": tenant_id,
             "key": key,
-            "value": value,
+            "value": value_json,
             "description": description,
         }
         with postgres_client.get_session() as session:
@@ -243,11 +282,35 @@ class TenantManager:
         with postgres_client.get_session() as session:
             result = session.execute(text(query), {"tenant_id": tenant_id, "key": key})
             row = result.fetchone()
-            return row["value"] if row else None
+            if not row:
+                return None
+            # SQLAlchemy 2.0+ Row objects use _mapping for dict access
+            row_dict = row._mapping if hasattr(row, '_mapping') else dict(row)
+            value = row_dict["value"]
+            # Parse JSON string if needed (JSONB might return as string)
+            if isinstance(value, str):
+                try:
+                    return json.loads(value)
+                except (json.JSONDecodeError, TypeError):
+                    return value
+            return value
 
     def get_all_tenant_configs(self, tenant_id: str) -> Dict[str, Any]:
         """Get all tenant configurations."""
         query = "SELECT key, value FROM tenant_configs WHERE tenant_id = :tenant_id"
         with postgres_client.get_session() as session:
             result = session.execute(text(query), {"tenant_id": tenant_id})
-            return {row["key"]: row["value"] for row in result}
+            configs = {}
+            for row in result:
+                # SQLAlchemy 2.0+ Row objects use _mapping for dict access
+                row_dict = row._mapping if hasattr(row, '_mapping') else dict(row)
+                value = row_dict["value"]
+                key = row_dict["key"]
+                # Parse JSON string if needed (JSONB might return as string)
+                if isinstance(value, str):
+                    try:
+                        value = json.loads(value)
+                    except (json.JSONDecodeError, TypeError):
+                        pass  # Keep as string if not valid JSON
+                configs[key] = value
+            return configs

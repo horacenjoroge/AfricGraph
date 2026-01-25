@@ -14,6 +14,8 @@ from src.security.query_rewriter import (
     rewrite_node_query_with_permissions,
     rewrite_traversal_with_permissions,
 )
+from src.tenancy.query_rewriter import TenantQueryRewriter
+from src.tenancy.context import get_current_tenant
 from src.monitoring.instrumentation import track_neo4j_query
 
 if TYPE_CHECKING:
@@ -139,16 +141,53 @@ class Neo4jClient:
         subject: Optional["SubjectAttributes"] = None,
         action: Optional["Action"] = None,
         node_alias: str = "n",
+        skip_tenant_filter: bool = False,
     ) -> List[Dict[str, Any]]:
         """
-        Execute a Cypher query with optional permission-aware filtering.
+        Execute a Cypher query with optional permission-aware filtering and tenant isolation.
 
         If a SubjectAttributes is provided, node-level filters are injected using the
         configured alias (defaults to 'n').
+        
+        Tenant filtering is automatically applied unless skip_tenant_filter=True.
         """
         if parameters is None:
             parameters = {}
 
+        # Apply tenant filtering first (unless explicitly skipped)
+        if not skip_tenant_filter:
+            tenant = get_current_tenant()
+            if tenant:
+                logger.debug(
+                    "Applying tenant filter to query",
+                    tenant_id=tenant.tenant_id,
+                    query_preview=query[:100],
+                )
+                # Apply tenant isolation to the query
+                tenant_rewritten = TenantQueryRewriter.rewrite_node_query(
+                    query,
+                    parameters,
+                    node_alias=node_alias,
+                )
+                query = tenant_rewritten.cypher
+                parameters = tenant_rewritten.params
+                logger.debug(
+                    "Query rewritten with tenant filter",
+                    tenant_id=tenant.tenant_id,
+                    rewritten_query_preview=query[:150],
+                )
+            else:
+                # No tenant context - return empty results for data queries
+                # Allow system queries (e.g., schema queries) to proceed
+                if any(keyword in query.upper() for keyword in ["MATCH", "RETURN", "CREATE", "MERGE", "DELETE"]):
+                    logger.warning(
+                        "Data query executed without tenant context - returning empty results",
+                        query=query[:100],
+                        has_tenant_context=False,
+                    )
+                    return []
+
+        # Apply permission-based filtering if subject provided
         if subject is not None:
             from src.security.abac import Action as AbacAction
             if action is None:
@@ -211,6 +250,10 @@ class Neo4jClient:
 
     def create_node(self, label: str, properties: Dict[str, Any]) -> str:
         """Create a node and return its internal id as string. Label validated via ontology."""
+        # Ensure tenant_id is in properties
+        from src.tenancy.query_rewriter import TenantQueryRewriter
+        properties = TenantQueryRewriter.add_tenant_to_properties(properties)
+        
         query = cypher_queries.create_node_query(label)
 
         def _execute():
@@ -228,6 +271,17 @@ class Neo4jClient:
         if filters is None:
             filters = {}
         query = cypher_queries.find_node_query(label, list(filters.keys()))
+        
+        # Apply tenant filtering
+        tenant = get_current_tenant()
+        if tenant:
+            tenant_rewritten = TenantQueryRewriter.rewrite_node_query(query, filters, node_alias="n")
+            query = tenant_rewritten.cypher
+            filters = tenant_rewritten.params
+        else:
+            # No tenant context - return None
+            logger.warning("find_node called without tenant context")
+            return None
 
         def _execute():
             with self.get_session() as session:
@@ -275,6 +329,21 @@ class Neo4jClient:
         """
         query = cypher_queries.traverse_query(rel_types, max_depth)
         params: Dict[str, Any] = {"start_id": int(start_id)}
+
+        # Apply tenant filtering first
+        tenant = get_current_tenant()
+        if tenant:
+            tenant_rewritten = TenantQueryRewriter.rewrite_traversal_query(
+                query,
+                params,
+                start_alias="start",
+            )
+            query = tenant_rewritten.cypher
+            params = tenant_rewritten.params
+        else:
+            # No tenant context - return empty result
+            logger.warning("traverse called without tenant context")
+            return {"start_id": int(start_id), "nodes": [], "relationships": []}
 
         if subject is not None:
             from src.security.abac import Action as AbacAction

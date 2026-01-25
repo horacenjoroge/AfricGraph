@@ -1,11 +1,9 @@
 """Tenant-aware middleware for FastAPI."""
 from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
 
 from src.infrastructure.logging import get_logger
-from src.tenancy.context import get_tenant_from_request, set_current_tenant, get_current_tenant
-from src.tenancy.models import Tenant
+from src.tenancy.context import get_tenant_from_request, set_current_tenant
 
 logger = get_logger(__name__)
 
@@ -21,47 +19,89 @@ class TenantMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Extract tenant from request
+        # Log all headers for debugging
+        x_tenant_header = request.headers.get("X-Tenant-ID") or request.headers.get("x-tenant-id")
+        logger.info(
+            "Tenant middleware - checking request",
+            path=request.url.path,
+            x_tenant_id_header=x_tenant_header,
+            all_headers=list(request.headers.keys())[:10],
+        )
+        
         tenant = await get_tenant_from_request(request)
         
+        logger.info(
+            "Tenant middleware - after extraction",
+            path=request.url.path,
+            has_tenant=tenant is not None,
+            tenant_id=tenant.tenant_id if tenant else None,
+        )
+        
         if not tenant:
-            # Allow some endpoints without tenant (e.g., tenant creation, auth)
+            # Allow some endpoints without tenant (e.g., tenant creation, auth, health checks)
             allowed_without_tenant = [
                 "/tenants",
                 "/api/tenants",
                 "/api/auth",
                 "/auth",
                 "/graphql",  # GraphQL handles auth internally
+                "/health",
+                "/metrics",
+                "/docs",
+                "/openapi.json",
+                "/redoc",
             ]
             if any(request.url.path.startswith(path) for path in allowed_without_tenant):
                 return await call_next(request)
             
-            # For development: try to get or create a default tenant
-            # In production, this should be more strict
-            try:
-                from src.tenancy.manager import tenant_manager
-                # Try to get a default tenant or create one
-                default_tenants = tenant_manager.list_tenants(limit=1)
-                if default_tenants:
-                    tenant = default_tenants[0]
-                else:
-                    # Create a default tenant for development
-                    from uuid import uuid4
-                    tenant = tenant_manager.create_tenant(
-                        tenant_id=str(uuid4()),
-                        name="Default Tenant",
-                        domain=None,
-                        config={"development": True}
-                    )
-                    logger.info("Created default tenant for development", tenant_id=tenant.tenant_id)
-            except Exception as e:
-                logger.warning("Could not get/create default tenant", error=str(e))
-                # For development, allow requests to proceed without tenant
-                # In production, this should return 403
-                return await call_next(request)
+            # For data access endpoints, require tenant
+            # Data access endpoints that require tenant isolation
+            data_access_paths = [
+                "/api/v1",
+                "/api/graph",
+                "/api/businesses",
+                "/api/transactions",
+                "/api/alerts",
+                "/api/fraud",
+            ]
+            
+            if any(request.url.path.startswith(path) for path in data_access_paths):
+                logger.warning(
+                    "Data access attempted without tenant",
+                    path=request.url.path,
+                    method=request.method,
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail="Tenant context required for data access. Please set X-Tenant-ID header or select a tenant."
+                )
+            
+            # For other endpoints, allow but log warning
+            logger.warning(
+                "Request without tenant context",
+                path=request.url.path,
+                method=request.method,
+            )
         
         if tenant:
             # Set tenant in context
+            logger.info(
+                "Setting tenant context",
+                tenant_id=tenant.tenant_id,
+                path=request.url.path,
+            )
             set_current_tenant(tenant)
+            
+            # Verify it was set
+            from src.tenancy.context import get_current_tenant as verify_tenant
+            verified = verify_tenant()
+            if verified:
+                logger.info(
+                    "Tenant context verified",
+                    tenant_id=verified.tenant_id,
+                )
+            else:
+                logger.error("Failed to set tenant context!")
             
             # Add tenant to request state for easy access
             request.state.tenant = tenant

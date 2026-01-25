@@ -4,6 +4,9 @@ from contextvars import ContextVar
 from fastapi import Request, Header
 from src.tenancy.models import Tenant
 from src.tenancy.manager import TenantManager
+from src.infrastructure.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Context variable for current tenant
 current_tenant: ContextVar[Optional[Tenant]] = ContextVar("current_tenant", default=None)
@@ -30,12 +33,33 @@ async def get_tenant_from_request(request: Request) -> Optional[Tenant]:
     2. Subdomain from Host header
     3. Tenant from JWT token (if available)
     """
-    # Check X-Tenant-ID header
-    tenant_id = request.headers.get("X-Tenant-ID")
+    # Check X-Tenant-ID header (case-insensitive)
+    # FastAPI/Starlette headers are case-insensitive, but let's check both
+    tenant_id = request.headers.get("X-Tenant-ID") or request.headers.get("x-tenant-id") or request.headers.get("X-TENANT-ID")
+    
+    # Also check all headers for debugging
+    all_header_keys = list(request.headers.keys())
+    print(f"[DEBUG] get_tenant_from_request: path={request.url.path}, tenant_id={tenant_id}, headers={all_header_keys[:5]}")
+    logger.info(
+        "Checking for tenant header",
+        path=request.url.path,
+        x_tenant_id=tenant_id,
+        header_keys=all_header_keys[:10],
+    )
+    
     if tenant_id:
-        tenant = tenant_manager.get_tenant(tenant_id)
-        if tenant and tenant.status == "active":
-            return tenant
+        logger.info("Found X-Tenant-ID header", tenant_id=tenant_id, path=request.url.path)
+        tenant = tenant_manager.get_tenant(tenant_id.strip())  # Strip whitespace
+        if tenant:
+            if tenant.status == "active":
+                logger.info("Tenant found and active", tenant_id=tenant_id, name=tenant.name)
+                return tenant
+            else:
+                logger.warning("Tenant found but not active", tenant_id=tenant_id, status=tenant.status)
+        else:
+            logger.warning("Tenant not found in database", tenant_id=tenant_id)
+    else:
+        logger.warning("No X-Tenant-ID header found", path=request.url.path, available_headers=all_header_keys[:10])
 
     # Check subdomain
     host = request.headers.get("Host", "")

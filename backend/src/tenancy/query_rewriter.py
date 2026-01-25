@@ -28,6 +28,7 @@ class TenantQueryRewriter:
         Rewrite a node query to include tenant filtering.
 
         Adds tenant_id property check to node queries.
+        Automatically detects node alias from MATCH patterns if not provided.
         """
         tenant = get_current_tenant()
         if not tenant:
@@ -35,18 +36,40 @@ class TenantQueryRewriter:
             logger.warning("No tenant context for query rewrite")
             return RewrittenQuery(cypher=query, params=params or {})
 
+        # Try to detect node alias from MATCH pattern if default is used
+        import re
+        if node_alias == "n":
+            # Look for MATCH patterns like (b:Label), (n:Label), (start:Label), etc.
+            match_pattern = r"MATCH\s+\((\w+):"
+            matches = re.findall(match_pattern, query, re.IGNORECASE)
+            if matches:
+                # Use the first alias found in MATCH clause
+                node_alias = matches[0]
+                logger.debug(f"Detected node alias from query: {node_alias}")
+
         # Add tenant_id filter to WHERE clause
         # This is a simplified approach - in production, you'd want more sophisticated parsing
         if "WHERE" in query.upper():
             # Add tenant filter to existing WHERE clause
-            query = query.replace("WHERE", f"WHERE {node_alias}.tenant_id = $tenant_id AND", 1)
+            # Use case-insensitive replacement but preserve original case
+            where_pos = query.upper().find("WHERE")
+            if where_pos != -1:
+                # Insert tenant filter after WHERE
+                query = query[:where_pos + 5] + f" {node_alias}.tenant_id = $tenant_id AND" + query[where_pos + 5:]
         else:
             # Add WHERE clause with tenant filter
             # Find the MATCH or CREATE clause
             if "MATCH" in query.upper():
-                query = query.replace("MATCH", "MATCH", 1)
-                # Add WHERE after MATCH pattern
-                query = query + f" WHERE {node_alias}.tenant_id = $tenant_id"
+                # Find the end of the MATCH pattern (before RETURN, WITH, etc.)
+                match_end_keywords = ["RETURN", "WITH", "ORDER BY", "SKIP", "LIMIT", "CREATE", "MERGE", "DELETE"]
+                match_end = len(query)
+                for keyword in match_end_keywords:
+                    keyword_pos = query.upper().find(keyword)
+                    if keyword_pos != -1 and keyword_pos < match_end:
+                        match_end = keyword_pos
+                
+                # Insert WHERE clause before RETURN/WITH/etc.
+                query = query[:match_end].rstrip() + f" WHERE {node_alias}.tenant_id = $tenant_id " + query[match_end:].lstrip()
             elif "CREATE" in query.upper():
                 # For CREATE, add tenant_id to properties
                 # This is handled in the params, but we can also add WHERE if needed
@@ -56,6 +79,7 @@ class TenantQueryRewriter:
         new_params = dict(params or {})
         new_params["tenant_id"] = tenant.tenant_id
 
+        logger.debug(f"Rewritten query with tenant filter", original_alias=node_alias, tenant_id=tenant.tenant_id)
         return RewrittenQuery(cypher=query, params=new_params)
 
     @staticmethod

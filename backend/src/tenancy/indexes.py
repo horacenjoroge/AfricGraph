@@ -103,10 +103,11 @@ def ensure_tenant_indexes() -> Dict[str, Any]:
 
 def get_index_status() -> Dict[str, Any]:
     """Get status of all tenant-related indexes."""
+    # Use CALL db.indexes() for Neo4j 4.x compatibility
     query = """
-    SHOW INDEXES
-    WHERE name CONTAINS 'tenant' OR name CONTAINS 'Tenant'
+    CALL db.indexes()
     YIELD name, type, entityType, labelsOrTypes, properties, state, populationPercent
+    WHERE name CONTAINS 'tenant' OR name CONTAINS 'Tenant'
     RETURN name, type, entityType, labelsOrTypes, properties, state, populationPercent
     ORDER BY name
     """
@@ -118,12 +119,27 @@ def get_index_status() -> Dict[str, Any]:
             "indexes": indexes,
         }
     except Exception as e:
-        logger.error(f"Failed to get index status: {str(e)}")
-        return {
-            "total_indexes": 0,
-            "indexes": [],
-            "error": str(e),
-        }
+        # Fallback: try SHOW INDEXES syntax (Neo4j 5.x)
+        try:
+            query_alt = """
+            SHOW INDEXES
+            YIELD name, type, entityType, labelsOrTypes, properties, state, populationPercent
+            WHERE name CONTAINS 'tenant' OR name CONTAINS 'Tenant'
+            RETURN name, type, entityType, labelsOrTypes, properties, state, populationPercent
+            ORDER BY name
+            """
+            indexes = neo4j_client.execute_cypher(query_alt, skip_tenant_filter=True)
+            return {
+                "total_indexes": len(indexes),
+                "indexes": indexes,
+            }
+        except Exception as e2:
+            logger.error(f"Failed to get index status: {str(e2)}")
+            return {
+                "total_indexes": 0,
+                "indexes": [],
+                "error": str(e2),
+            }
 
 
 def drop_tenant_indexes() -> Dict[str, Any]:

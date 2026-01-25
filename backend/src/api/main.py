@@ -33,7 +33,6 @@ from src.deduplication.merge_history import ensure_merge_history_table
 from src.ingestion.pipeline.job_store import ensure_ingestion_jobs_table
 from src.security.abac import PermissionContextMiddleware
 from src.tenancy.middleware import TenantMiddleware
-from src.tenancy.middleware import TenantMiddleware
 
 # Configure logging
 configure_logging(settings.log_level)

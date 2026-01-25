@@ -131,6 +131,46 @@ def create_tenant(
         raise HTTPException(status_code=500, detail=f"Failed to create tenant: {str(e)}")
 
 
+@router.get("/available", response_model=dict)
+def list_available_tenants(
+    user_id: Optional[str] = Depends(get_current_user_id),
+    status: Optional[str] = Query("active", description="Filter by status"),
+) -> dict:
+    """
+    List tenants available to the current user.
+    - Admins see all tenants (filtered by status if provided)
+    - Regular users see all active tenants (for selection)
+    - If not authenticated, returns all active tenants (for development)
+    """
+    try:
+        manager = get_tenant_manager()
+        
+        # Default to active if no status specified
+        filter_status = status if status else "active"
+        
+        # If user is admin, return all tenants (or filtered by status)
+        if user_id:
+            user = get_user_by_id(user_id)
+            if user and user.role == "admin":
+                tenants = manager.list_tenants(status=filter_status, limit=1000)
+                return {
+                    "tenants": [tenant.model_dump(mode="json") for tenant in tenants],
+                    "total": len(tenants),
+                }
+        
+        # For regular users or unauthenticated, return active tenants only
+        tenants = manager.list_tenants(status="active", limit=1000)
+        logger.info(f"Returning {len(tenants)} active tenants for user", user_id=user_id)
+        return {
+            "tenants": [tenant.model_dump(mode="json") for tenant in tenants],
+            "total": len(tenants),
+        }
+    except Exception as e:
+        logger.exception("Failed to list available tenants", error=str(e))
+        # Return empty list on error rather than failing
+        return {"tenants": [], "total": 0}
+
+
 @router.get("/{tenant_id}", response_model=dict)
 def get_tenant(
     tenant_id: str,
@@ -338,3 +378,16 @@ def get_current_tenant_info() -> dict:
 def get_my_tenant_info() -> dict:
     """Get current tenant information (alias for /current). Accessible to all authenticated users."""
     return get_current_tenant_info()
+
+
+@router.get("/debug/context", response_model=dict)
+def debug_tenant_context() -> dict:
+    """Debug endpoint to check tenant context."""
+    from src.tenancy.context import get_current_tenant
+    tenant = get_current_tenant()
+    return {
+        "has_tenant": tenant is not None,
+        "tenant_id": tenant.tenant_id if tenant else None,
+        "tenant_name": tenant.name if tenant else None,
+        "tenant_status": tenant.status if tenant else None,
+    }

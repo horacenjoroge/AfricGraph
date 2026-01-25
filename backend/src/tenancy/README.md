@@ -9,7 +9,10 @@ This module provides multi-tenancy support, allowing multiple organizations to u
 - **Tenant-Specific Configs**: Per-tenant configuration
 - **Cross-Tenant Analytics**: Aggregated analytics (no individual tenant data)
 - **Data Export**: Export all data for a tenant
-- **Tenant Migration**: Migrate tenant data between instances
+- **Tenant Migration**: Migrate tenant data between instances with validation
+- **Performance Optimization**: Indexes for tenant_id on all node labels
+- **Data Leak Prevention**: Query validation and security checks
+- **Monitoring & Health**: Tenant health monitoring and resource usage tracking
 
 ## Architecture
 
@@ -118,16 +121,43 @@ result = migration.migrate_tenant(
 
 ### Analytics
 
-- `GET /tenants/analytics/aggregated` - Cross-tenant analytics
+- `GET /tenants/analytics/aggregated` - Cross-tenant aggregated statistics
+- `GET /tenants/analytics/distribution?metric=nodes` - Tenant distribution by metric
+- `GET /tenants/analytics/activity?days=30` - Aggregated activity summary
+
+### Monitoring
+
+- `GET /tenants/{id}/health` - Get tenant health metrics
+- `GET /tenants/{id}/usage?days=30` - Get tenant resource usage
+- `GET /tenants/health/all` - Get health status for all tenants
+
+### Index Management
+
+- `POST /tenants/indexes/ensure` - Ensure all tenant indexes exist
+- `GET /tenants/indexes/status` - Get status of tenant-related indexes
 
 ## Performance Considerations
 
 ### With Many Tenants
 
-1. **Indexes**: Ensure `tenant_id` is indexed on all tables
+1. **Indexes**: Ensure `tenant_id` is indexed on all node labels
+   - Run: `python scripts/ensure_tenant_indexes.py`
+   - Or use API: `POST /tenants/indexes/ensure`
 2. **Query Optimization**: Tenant filters added early in query execution
-3. **Caching**: Cache tenant configs and stats
-4. **Partitioning**: Consider partitioning large tables by tenant
+3. **Caching**: Cache tenant configs and stats (implemented in manager)
+4. **Composite Indexes**: Created for common query patterns (tenant_id + other filters)
+5. **Monitoring**: Track query performance per tenant
+
+### Index Creation
+
+```bash
+# Create all tenant isolation indexes
+python scripts/ensure_tenant_indexes.py
+
+# Or via API (requires admin)
+curl -X POST http://localhost:8000/tenants/indexes/ensure \
+  -H "Authorization: Bearer <admin_token>"
+```
 
 ### Storage
 
@@ -139,8 +169,17 @@ result = migration.migrate_tenant(
 
 1. **Always Validate Tenant**: Middleware ensures tenant context
 2. **Query Rewriting**: All queries include tenant filter
-3. **Audit Logging**: Log all tenant operations
-4. **Access Control**: Combine with ABAC for fine-grained control
+3. **Query Validation**: TenantSecurityValidator checks for unsafe patterns
+4. **Audit Logging**: Log all tenant operations
+5. **Access Control**: Combine with ABAC for fine-grained control
+6. **Data Leak Prevention**: Multiple layers of validation
+
+### Security Features
+
+- **Query Validation**: Detects patterns that could bypass tenant filtering
+- **Context Verification**: Ensures tenant context is set before data access
+- **Access Control**: Validates user permissions for tenant operations
+- **Audit Trail**: All queries are logged for security monitoring
 
 ## Migration
 

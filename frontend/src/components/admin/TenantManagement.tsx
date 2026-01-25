@@ -33,15 +33,33 @@ export default function TenantManagement() {
     try {
       setLoading(true)
       const token = localStorage.getItem('auth_token')
+      if (!token) {
+        console.warn('No auth token found')
+        setTenants([])
+        return
+      }
+      
       const response = await axios.get('/tenants', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
-      setTenants(response.data.tenants || [])
+      const tenantList = response.data?.tenants || []
+      console.log('Fetched tenants in Admin panel:', tenantList)
+      setTenants(tenantList)
+      
+      if (tenantList.length === 0) {
+        console.warn('No tenants found. Response:', response.data)
+      }
     } catch (error: any) {
       console.error('Failed to fetch tenants:', error)
-      showError(error.response?.data?.detail || 'Failed to load tenants')
+      console.error('Error response:', error.response?.data)
+      setTenants([])
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        showError('Admin access required to view tenants')
+      } else {
+        showError(error.response?.data?.detail || 'Failed to load tenants')
+      }
     } finally {
       setLoading(false)
     }
@@ -51,7 +69,13 @@ export default function TenantManagement() {
     e.preventDefault()
     try {
       const token = localStorage.getItem('auth_token')
-      await axios.post(
+      if (!token) {
+        showError('You must be logged in to create tenants')
+        return
+      }
+      
+      console.log('Creating tenant:', formData)
+      const response = await axios.post(
         '/tenants',
         {
           tenant_id: formData.tenant_id,
@@ -65,13 +89,26 @@ export default function TenantManagement() {
           },
         }
       )
-      showSuccess('Tenant created successfully')
+      console.log('Tenant creation response:', response.data)
+      showSuccess(`Tenant "${formData.name}" created successfully`)
       setShowCreateForm(false)
       setFormData({ tenant_id: '', name: '', domain: '', status: 'active' })
-      fetchTenants()
+      // Wait a bit before fetching to ensure database is updated
+      setTimeout(() => {
+        fetchTenants()
+      }, 500)
     } catch (error: any) {
       console.error('Failed to create tenant:', error)
-      showError(error.response?.data?.detail || 'Failed to create tenant')
+      console.error('Error response:', error.response?.data)
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to create tenant'
+      showError(errorMessage)
+      
+      // If it's a 403, user might not be admin
+      if (error.response?.status === 403) {
+        showError('Admin role required to create tenants. Please contact an administrator.')
+      } else if (error.response?.status === 401) {
+        showError('You must be logged in to create tenants')
+      }
     }
   }
 

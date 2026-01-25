@@ -28,7 +28,13 @@ class CrossTenantAnalytics:
         query = "SELECT COUNT(*) as count FROM tenants WHERE status = 'active'"
         with postgres_client.get_session() as session:
             result = session.execute(text(query))
-            tenant_count = result.fetchone()["count"]
+            row = result.fetchone()
+            # Handle both dict and tuple formats
+            if row:
+                row_dict = row._mapping if hasattr(row, '_mapping') else dict(row)
+                tenant_count = row_dict.get("count", 0) if isinstance(row_dict, dict) else row[0]
+            else:
+                tenant_count = 0
 
         # Get aggregated node count (from Neo4j)
         # This is a simplified approach - in production, you'd maintain aggregated stats

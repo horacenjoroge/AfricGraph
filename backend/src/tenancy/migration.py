@@ -133,7 +133,11 @@ class TenantMigrationManager:
         WHERE n.tenant_id = $tenant_id
         RETURN count(n) as count
         """
-        node_result = neo4j_client.execute_cypher(node_query, {"tenant_id": tenant_id})
+        node_result = neo4j_client.execute_cypher(
+            node_query, 
+            {"tenant_id": tenant_id},
+            skip_tenant_filter=True,  # Already has tenant filter
+        )
         node_count = node_result[0]["count"] if node_result else 0
 
         rel_query = """
@@ -141,7 +145,11 @@ class TenantMigrationManager:
         WHERE r.tenant_id = $tenant_id
         RETURN count(r) as count
         """
-        rel_result = neo4j_client.execute_cypher(rel_query, {"tenant_id": tenant_id})
+        rel_result = neo4j_client.execute_cypher(
+            rel_query, 
+            {"tenant_id": tenant_id},
+            skip_tenant_filter=True,  # Already has tenant filter
+        )
         rel_count = rel_result[0]["count"] if rel_result else 0
 
         return {"nodes": node_count, "relationships": rel_count}

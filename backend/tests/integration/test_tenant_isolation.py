@@ -138,9 +138,16 @@ class TestTenantIsolation:
             {"tenant_id": tenant1.tenant_id},
             skip_tenant_filter=True,
         )
-        # Should only find tenant 1's node
-        tenant1_nodes = [n for n in nodes1 if n.get("n", {}).get("properties", {}).get("tenant_id") == tenant1.tenant_id]
-        assert len(tenant1_nodes) > 0
+        # Neo4j returns Node objects - extract properties
+        tenant1_nodes = []
+        for record in nodes1:
+            node = record.get("n")
+            if node:
+                # Node object has properties attribute
+                props = dict(node) if hasattr(node, '__iter__') and not isinstance(node, str) else {}
+                if props.get("tenant_id") == tenant1.tenant_id:
+                    tenant1_nodes.append(record)
+        assert len(tenant1_nodes) > 0, f"Expected tenant 1 nodes, got {nodes1}"
 
         # Query with tenant 2 context - should only see tenant 2 nodes
         set_current_tenant(tenant2)
@@ -150,9 +157,15 @@ class TestTenantIsolation:
             {"tenant_id": tenant2.tenant_id},
             skip_tenant_filter=True,
         )
-        # Should only find tenant 2's node
-        tenant2_nodes = [n for n in nodes2 if n.get("n", {}).get("properties", {}).get("tenant_id") == tenant2.tenant_id]
-        assert len(tenant2_nodes) > 0
+        # Neo4j returns Node objects - extract properties
+        tenant2_nodes = []
+        for record in nodes2:
+            node = record.get("n")
+            if node:
+                props = dict(node) if hasattr(node, '__iter__') and not isinstance(node, str) else {}
+                if props.get("tenant_id") == tenant2.tenant_id:
+                    tenant2_nodes.append(record)
+        assert len(tenant2_nodes) > 0, f"Expected tenant 2 nodes, got {nodes2}"
 
         # Verify isolation - tenant 1 should not see tenant 2's data
         set_current_tenant(tenant1)
@@ -161,8 +174,14 @@ class TestTenantIsolation:
             {"tenant_id": tenant1.tenant_id},
             skip_tenant_filter=True,
         )
-        tenant2_data = [n for n in all_nodes if n.get("n", {}).get("properties", {}).get("tenant_id") == tenant2.tenant_id]
-        assert len(tenant2_data) == 0, "Tenant 1 should not see tenant 2's data"
+        tenant2_data = []
+        for record in all_nodes:
+            node = record.get("n")
+            if node:
+                props = dict(node) if hasattr(node, '__iter__') and not isinstance(node, str) else {}
+                if props.get("tenant_id") == tenant2.tenant_id:
+                    tenant2_data.append(record)
+        assert len(tenant2_data) == 0, f"Tenant 1 should not see tenant 2's data, but found {tenant2_data}"
 
     def test_tenant_data_isolation_relationships(self, tenant1, tenant2):
         """Test that relationships are isolated between tenants."""
@@ -246,14 +265,15 @@ class TestTenantIsolation:
         from src.tenancy.query_rewriter import TenantQueryRewriter
         
         set_current_tenant(tenant1)
-        rewriter = TenantQueryRewriter()
         
         query = "MATCH (n:Business) RETURN n"
-        rewritten = rewriter.rewrite_query(query, {})
+        rewritten = TenantQueryRewriter.rewrite_node_query(query, {})
         
         # Should include tenant_id filter
-        assert "tenant_id" in rewritten.lower()
-        assert tenant1.tenant_id in str(rewritten) or "$tenant_id" in rewritten
+        assert "tenant_id" in rewritten.cypher.lower()
+        assert "$tenant_id" in rewritten.cypher or tenant1.tenant_id in rewritten.cypher
+        assert "tenant_id" in rewritten.params
+        assert rewritten.params["tenant_id"] == tenant1.tenant_id
 
     def test_cross_tenant_data_leak_prevention(self, tenant1, tenant2):
         """Test that queries cannot leak data across tenants."""
@@ -293,18 +313,16 @@ class TestTenantIsolation:
         assert config2.value == "tenant2_value"
 
         # Get configs - should be isolated
+        # get_all_tenant_configs returns a dict {key: value}
         configs1 = tenant_manager.get_all_tenant_configs(tenant1.tenant_id)
         configs2 = tenant_manager.get_all_tenant_configs(tenant2.tenant_id)
         
-        # Find test_key in each
-        test_config1 = next((c for c in configs1 if c.key == "test_key"), None)
-        test_config2 = next((c for c in configs2 if c.key == "test_key"), None)
-        
-        assert test_config1 is not None
-        assert test_config2 is not None
-        assert test_config1.value == "tenant1_value"
-        assert test_config2.value == "tenant2_value"
-        assert test_config1.value != test_config2.value
+        # Verify configs are isolated
+        assert "test_key" in configs1, f"Config not found in tenant1 configs: {configs1}"
+        assert "test_key" in configs2, f"Config not found in tenant2 configs: {configs2}"
+        assert configs1["test_key"] == "tenant1_value"
+        assert configs2["test_key"] == "tenant2_value"
+        assert configs1["test_key"] != configs2["test_key"]
 
     @patch("src.infrastructure.database.neo4j_client.neo4j_client")
     def test_tenant_filter_in_queries(self, mock_client, tenant1):

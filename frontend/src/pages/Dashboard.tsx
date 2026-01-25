@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import axios from 'axios'
+import api from '../utils/api'
 
 interface KPI {
   label: string
@@ -22,6 +23,8 @@ export default function DashboardPage() {
   const [kpis, setKpis] = useState<KPI[]>([])
   const [recentAlerts, setRecentAlerts] = useState<Alert[]>([])
   const [loading, setLoading] = useState(true)
+  const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [showDebug, setShowDebug] = useState(false)
 
   useEffect(() => {
     fetchDashboardData()
@@ -79,43 +82,94 @@ export default function DashboardPage() {
       return
     }
     
+    console.log('Fetching dashboard data with tenant:', tenantId)
+    
     try {
+      // Use the configured api instance which has tenant headers
       // Fetch all data in parallel with tenant header
       const [businessesRes, alertsRes, fraudAlertsRes, transactionsRes] = await Promise.allSettled([
-        axios.get('/api/v1/businesses/search', { 
-          params: { limit: 1 },
-          headers: { 'X-Tenant-ID': tenantId }
+        api.get('/businesses/search', { 
+          params: { limit: 1 }
+        }).catch(err => {
+          console.error('Businesses fetch error:', err.response?.status, err.response?.data, err.message)
+          throw err
         }),
-        axios.get('/alerts', { 
-          params: { limit: 10, status: 'active' },
-          headers: { 'X-Tenant-ID': tenantId }
+        api.get('/anomaly/alerts', { 
+          params: { limit: 10, severity: 'high' }
+        }).catch(err => {
+          console.error('Anomaly alerts fetch error:', err.response?.status, err.response?.data, err.message)
+          throw err
         }),
-        axios.get('/api/v1/fraud/alerts', { 
-          params: { limit: 10, status: 'pending' },
-          headers: { 'X-Tenant-ID': tenantId }
+        api.get('/fraud/alerts', { 
+          params: { limit: 10, status: 'pending' }
+        }).catch(err => {
+          console.error('Fraud alerts fetch error:', err.response?.status, err.response?.data, err.message)
+          throw err
         }),
-        axios.get('/api/v1/graph/transactions', { 
-          params: { limit: 1 },
-          headers: { 'X-Tenant-ID': tenantId }
+        api.get('/graph/transactions', { 
+          params: { limit: 1 }
+        }).catch(err => {
+          console.error('Transactions fetch error:', err.response?.status, err.response?.data, err.message)
+          throw err
         }),
       ])
+      
+      console.log('Dashboard fetch results:', {
+        businesses: businessesRes.status,
+        alerts: alertsRes.status,
+        fraudAlerts: fraudAlertsRes.status,
+        transactions: transactionsRes.status,
+      })
 
       // Extract data from responses
       const totalBusinesses = businessesRes.status === 'fulfilled' 
         ? businessesRes.value.data.total || 0 
-        : 0
+        : (businessesRes.reason ? console.error('Businesses error:', businessesRes.reason) : 0)
 
       const alertsData = alertsRes.status === 'fulfilled' 
-        ? alertsRes.value.data.alerts || [] 
-        : []
+        ? (alertsRes.value.data.alerts || alertsRes.value.data || [])
+        : (alertsRes.reason ? (console.error('Alerts error:', alertsRes.reason), []) : [])
 
       const fraudAlertsData = fraudAlertsRes.status === 'fulfilled' 
-        ? fraudAlertsRes.value.data.items || [] 
-        : []
+        ? (fraudAlertsRes.value.data.items || fraudAlertsRes.value.data || [])
+        : (fraudAlertsRes.reason ? (console.error('Fraud alerts error:', fraudAlertsRes.reason), []) : [])
 
       const totalTransactions = transactionsRes.status === 'fulfilled'
         ? transactionsRes.value.data.total || 0
-        : 0
+        : (transactionsRes.reason ? (console.error('Transactions error:', transactionsRes.reason), 0) : 0)
+      
+      console.log('Extracted data:', {
+        totalBusinesses,
+        alertsCount: alertsData.length,
+        fraudAlertsCount: fraudAlertsData.length,
+        totalTransactions,
+      })
+      
+      // Store debug info
+      setDebugInfo({
+        tenantId,
+        businessesResponse: businessesRes.status === 'fulfilled' ? {
+          status: 'success',
+          total: businessesRes.value.data.total,
+          count: businessesRes.value.data.businesses?.length || 0,
+          data: businessesRes.value.data
+        } : { status: 'failed', error: businessesRes.reason?.message },
+        alertsResponse: alertsRes.status === 'fulfilled' ? {
+          status: 'success',
+          count: alertsData.length,
+          data: alertsRes.value.data
+        } : { status: 'failed', error: alertsRes.reason?.message },
+        fraudAlertsResponse: fraudAlertsRes.status === 'fulfilled' ? {
+          status: 'success',
+          count: fraudAlertsData.length,
+          data: fraudAlertsRes.value.data
+        } : { status: 'failed', error: fraudAlertsRes.reason?.message },
+        transactionsResponse: transactionsRes.status === 'fulfilled' ? {
+          status: 'success',
+          total: transactionsRes.value.data.total,
+          data: transactionsRes.value.data
+        } : { status: 'failed', error: transactionsRes.reason?.message },
+      })
 
       // Count high-risk businesses (businesses with risk score > 70)
       // For now, we'll estimate based on alerts or use a placeholder
@@ -184,8 +238,14 @@ export default function DashboardPage() {
       ])
 
       setRecentAlerts(allAlerts)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch dashboard data:', error)
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        tenantId: tenantId,
+      })
       // Set default values on error
       setKpis([
         { label: 'Total Businesses', value: '0', color: 'cyan' },
@@ -193,6 +253,7 @@ export default function DashboardPage() {
         { label: 'Fraud Alerts', value: '0', color: 'purple' },
         { label: 'Total Transactions', value: '0', color: 'green' },
       ])
+      setRecentAlerts([])
     } finally {
       setLoading(false)
     }
@@ -223,14 +284,31 @@ export default function DashboardPage() {
           </h1>
           <p className="text-gray-500 font-mono text-sm">REAL-TIME INTELLIGENCE OVERVIEW</p>
         </div>
-        <button
-          onClick={fetchDashboardData}
-          disabled={loading}
-          className="px-4 py-2 glass-panel border border-glow-cyan/20 hover:border-glow-cyan/40 transition-all text-sm font-mono uppercase tracking-wider disabled:opacity-50"
-        >
-          {loading ? 'LOADING...' : 'REFRESH'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="px-3 py-2 glass-panel border border-gray-500/20 hover:border-gray-500/40 transition-all text-xs font-mono uppercase tracking-wider"
+          >
+            {showDebug ? 'HIDE DEBUG' : 'SHOW DEBUG'}
+          </button>
+          <button
+            onClick={fetchDashboardData}
+            disabled={loading}
+            className="px-4 py-2 glass-panel border border-glow-cyan/20 hover:border-glow-cyan/40 transition-all text-sm font-mono uppercase tracking-wider disabled:opacity-50"
+          >
+            {loading ? 'LOADING...' : 'REFRESH'}
+          </button>
+        </div>
       </div>
+      
+      {showDebug && debugInfo && (
+        <div className="glass-panel border border-yellow-500/30 bg-yellow-500/5 p-4 rounded-lg mb-4">
+          <h3 className="text-yellow-400 font-mono font-semibold mb-2">Debug Info</h3>
+          <pre className="text-xs font-mono text-gray-300 overflow-auto max-h-64">
+            {JSON.stringify(debugInfo, null, 2)}
+          </pre>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

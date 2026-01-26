@@ -189,6 +189,26 @@
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
   }
+
+  /* Override hardcoded bg-deep-space to use theme-aware colors */
+  .bg-deep-space {
+    background-color: var(--bg-primary) !important;
+  }
+
+  .light-mode .bg-deep-space {
+    background-color: var(--bg-primary) !important;
+  }
+
+  /* Ensure all divs and containers use theme background */
+  div, section, main, article, aside {
+    background-color: transparent;
+  }
+
+  /* Root container should use theme background */
+  #root {
+    background-color: var(--bg-primary);
+    min-height: 100vh;
+  }
 }
 
 @layer components {

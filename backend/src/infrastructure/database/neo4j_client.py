@@ -396,6 +396,9 @@ class Neo4jClient:
         """Upsert node by (label, id). ON CREATE and ON MATCH both set props. Returns internal id. Idempotent."""
         if "id" not in props:
             props = dict(props, id=id_val)
+        # Ensure tenant_id is in properties
+        from src.tenancy.query_rewriter import TenantQueryRewriter
+        props = TenantQueryRewriter.add_tenant_to_properties(props)
         query = cypher_queries.merge_node_query(label)
 
         def _execute():

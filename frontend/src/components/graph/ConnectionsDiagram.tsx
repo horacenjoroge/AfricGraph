@@ -145,7 +145,6 @@ export default function ConnectionsDiagram({
             />
           ) : (
             <ListView
-              connections={connections}
               connectionsByType={connectionsByType}
               expandedConnections={expandedConnections}
               onToggleConnection={toggleConnection}
@@ -274,7 +273,6 @@ function ListView({
   expandedConnections,
   onToggleConnection,
 }: {
-  connections: Connection[]
   connectionsByType: Record<string, Connection[]>
   expandedConnections: Set<string>
   onToggleConnection: (id: string) => void

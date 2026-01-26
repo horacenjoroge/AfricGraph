@@ -81,7 +81,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <h1 className="text-2xl font-bold font-mono text-glow-cyan tracking-wider">
                   AFRICGRAPH
                 </h1>
-                <p className="text-xs text-gray-500 mt-1 font-mono">INTELLIGENCE CONSOLE v1.0</p>
+                <p className="text-xs mt-1 font-mono" style={{ color: 'var(--text-secondary)' }}>INTELLIGENCE CONSOLE v1.0</p>
               </div>
               <ThemeToggle />
             </div>
@@ -104,8 +104,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   className={`flex items-center gap-3 px-4 py-3 transition-all ${
                     isActive
                       ? 'text-glow-cyan border-l-2 border-glow-cyan bg-glow-cyan/10'
-                      : 'text-gray-400 hover:text-white hover:bg-glass/50 border-l-2 border-transparent'
+                      : 'hover:bg-glass/50 border-l-2 border-transparent'
                   }`}
+                  style={{
+                    color: isActive ? undefined : 'var(--text-secondary)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.color = 'var(--text-primary)'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.color = 'var(--text-secondary)'
+                    }
+                  }}
                 >
                   <Icon className={`w-4 h-4 ${isActive ? 'text-glow-cyan' : ''}`} />
                   <span className="font-medium text-sm">{item.label}</span>

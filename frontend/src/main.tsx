@@ -21,6 +21,16 @@ if (savedTenantId) {
   axios.defaults.headers.common['X-Tenant-ID'] = savedTenantId
 }
 
+// Initialize theme on app load
+const savedTheme = localStorage.getItem('theme') || 'dark'
+if (savedTheme === 'light') {
+  document.documentElement.classList.add('light-mode')
+  document.documentElement.classList.remove('dark-mode')
+} else {
+  document.documentElement.classList.add('dark-mode')
+  document.documentElement.classList.remove('light-mode')
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>

@@ -79,8 +79,8 @@ export default function Preferences() {
               className="w-4 h-4 text-blue-600"
             />
             <div>
-              <div className="font-medium text-gray-300">Dark Mode</div>
-              <div className="text-xs text-gray-500">Default dark theme</div>
+              <div className="font-medium" style={{ color: 'var(--text-primary)' }}>Dark Mode</div>
+              <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Default dark theme</div>
             </div>
           </label>
 
@@ -94,8 +94,8 @@ export default function Preferences() {
               className="w-4 h-4 text-blue-600"
             />
             <div>
-              <div className="font-medium text-gray-300">Light Mode</div>
-              <div className="text-xs text-gray-500">Light theme</div>
+              <div className="font-medium" style={{ color: 'var(--text-primary)' }}>Light Mode</div>
+              <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>Light theme</div>
             </div>
           </label>
         </div>

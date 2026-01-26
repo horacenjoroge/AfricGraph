@@ -10,6 +10,7 @@
     --bg-secondary: rgba(255, 255, 255, 0.03);
     --text-primary: #ffffff;
     --text-secondary: #9ca3af;
+    --text-tertiary: #6b7280;
     --border-color: rgba(255, 255, 255, 0.1);
   }
 
@@ -17,7 +18,8 @@
     --bg-primary: #f8fafc;
     --bg-secondary: rgba(0, 0, 0, 0.03);
     --text-primary: #0f172a;
-    --text-secondary: #64748b;
+    --text-secondary: #475569;
+    --text-tertiary: #64748b;
     --border-color: rgba(0, 0, 0, 0.1);
   }
 
@@ -34,6 +36,53 @@
 
   .light-mode body {
     background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  /* Ensure text colors adapt to theme */
+  .light-mode {
+    color: var(--text-primary);
+  }
+
+  /* Override Tailwind text colors to use CSS variables */
+  .text-white {
+    color: var(--text-primary);
+  }
+
+  .light-mode .text-white {
+    color: var(--text-primary);
+  }
+
+  .text-gray-300 {
+    color: var(--text-secondary);
+  }
+
+  .light-mode .text-gray-300 {
+    color: var(--text-secondary);
+  }
+
+  .text-gray-400 {
+    color: var(--text-secondary);
+  }
+
+  .light-mode .text-gray-400 {
+    color: var(--text-secondary);
+  }
+
+  .text-gray-500 {
+    color: var(--text-tertiary);
+  }
+
+  .light-mode .text-gray-500 {
+    color: var(--text-tertiary);
+  }
+
+  .text-gray-600 {
+    color: var(--text-tertiary);
+  }
+
+  .light-mode .text-gray-600 {
+    color: var(--text-secondary);
   }
 
   body::before {

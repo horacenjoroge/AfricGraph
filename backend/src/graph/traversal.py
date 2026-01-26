@@ -52,7 +52,7 @@ def extract_subgraph(
     // Get distinct nodes within max_hops (limited to prevent memory issues)
     MATCH (start)-[{rel_filter}*1..{max_hops}]-(n)
     WHERE n.tenant_id = $tenant_id
-    {node_filter}
+    {node_filter if node_filter else ""}
     WITH start, collect(DISTINCT n) as all_nodes
     // Limit nodes to prevent memory overflow
     WITH start, 

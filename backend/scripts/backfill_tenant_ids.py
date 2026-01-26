@@ -19,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.infrastructure.database.neo4j_client import neo4j_client
+from src.infrastructure.database.postgres_client import postgres_client
 from src.tenancy.manager import TenantManager
 from src.infrastructure.logging import get_logger
 from src.tenancy.context import set_current_tenant
@@ -35,7 +36,11 @@ def backfill_tenant_id(tenant_id: str, label: str = "Transaction", dry_run: bool
         label: The node label to update (default: Transaction)
         dry_run: If True, only show what would be updated without making changes
     """
-    # Verify tenant exists
+    # Connect to databases first (needed for tenant lookup)
+    postgres_client.connect()
+    neo4j_client.connect()
+    
+    # Initialize tenant manager and verify tenant exists
     tenant_manager = TenantManager()
     tenant = tenant_manager.get_tenant(tenant_id)
     if not tenant:
@@ -46,9 +51,6 @@ def backfill_tenant_id(tenant_id: str, label: str = "Transaction", dry_run: bool
     
     # Set tenant context for the operation
     set_current_tenant(tenant)
-    
-    # Connect to Neo4j
-    neo4j_client.connect()
     
     try:
         # Count nodes without tenant_id
@@ -111,6 +113,7 @@ def backfill_tenant_id(tenant_id: str, label: str = "Transaction", dry_run: bool
         return False
     finally:
         neo4j_client.close()
+        postgres_client.close()
         set_current_tenant(None)
 
 

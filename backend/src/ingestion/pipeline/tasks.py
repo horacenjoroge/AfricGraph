@@ -99,19 +99,21 @@ def ingest_mobile_money(
     _ensure_connections()
     
     # Set tenant context for the ingestion task
+    from src.infrastructure.logging import get_logger
+    logger = get_logger(__name__)
+    
+    logger.info("Ingestion task started", tenant_id=tenant_id, job_id=job_id, path=path)
+    
     if tenant_id:
         tenant_manager = TenantManager()
         tenant = tenant_manager.get_tenant(tenant_id)
         if tenant:
             set_current_tenant(tenant)
+            logger.info("Tenant context set for ingestion", tenant_id=tenant_id, tenant_name=tenant.name)
         else:
-            from src.infrastructure.logging import get_logger
-            logger = get_logger(__name__)
-            logger.warning(f"Tenant not found: {tenant_id}, proceeding without tenant context")
+            logger.error(f"Tenant not found: {tenant_id}, proceeding without tenant context")
     else:
-        from src.infrastructure.logging import get_logger
-        logger = get_logger(__name__)
-        logger.warning("No tenant_id provided to ingestion task, data may not be assigned to a tenant")
+        logger.error("No tenant_id provided to ingestion task, data may not be assigned to a tenant")
     
     jid = job_id
     if not jid:
@@ -127,7 +129,29 @@ def ingest_mobile_money(
             errs = validate_canonical_transaction(t)
             if not errs:
                 passed.append(t)
+        # Verify tenant context before writing
+        from src.tenancy.context import get_current_tenant as verify_tenant
+        current_tenant = verify_tenant()
+        logger.info("Writing transactions", tenant_id=current_tenant.tenant_id if current_tenant else None, count=len(passed))
+        
         write_mobile_money(passed)
+        
+        # Verify data was created with correct tenant_id
+        if passed and current_tenant:
+            from src.infrastructure.database.neo4j_client import neo4j_client
+            # Check a sample transaction to verify tenant_id
+            sample_id = passed[0].source_id if passed else None
+            if sample_id:
+                verify_query = 'MATCH (t:Transaction {id: $id}) RETURN t.tenant_id as tenant_id'
+                verify_result = neo4j_client.execute_cypher(verify_query, {'id': sample_id}, skip_tenant_filter=True)
+                if verify_result:
+                    actual_tenant = verify_result[0].get('tenant_id')
+                    if actual_tenant != current_tenant.tenant_id:
+                        logger.error(f"TENANT MISMATCH: Expected {current_tenant.tenant_id}, but transaction has {actual_tenant}", 
+                                   transaction_id=sample_id, expected_tenant=current_tenant.tenant_id, actual_tenant=actual_tenant)
+                    else:
+                        logger.info(f"Verified: Transaction created with correct tenant_id", transaction_id=sample_id, tenant_id=actual_tenant)
+        
         update_job_status(
             jid, STATUS_SUCCESS,
             stats={"rows_ok": len(passed), "rows_invalid": len(invalid) + (len(canonical) - len(passed))},

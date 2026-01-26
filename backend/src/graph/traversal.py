@@ -25,13 +25,17 @@ def extract_subgraph(
     """
     rel_filter = ""
     if rel_types:
-        types_str = "|".join(rel_types)
-        rel_filter = f":{types_str}"
+        # Handle both list and Query object types
+        if isinstance(rel_types, list) and len(rel_types) > 0:
+            types_str = "|".join(rel_types)
+            rel_filter = f":{types_str}"
 
     node_filter = ""
     if node_labels:
-        labels_str = ":".join(node_labels)
-        node_filter = f"AND '{labels_str}' IN labels(n)"
+        # Handle both list and Query object types
+        if isinstance(node_labels, list) and len(node_labels) > 0:
+            labels_str = ":".join(node_labels)
+            node_filter = f"AND '{labels_str}' IN labels(n)"
 
     # Optimized query to prevent memory issues
     # Use a simpler pattern that limits results and avoids collecting all paths

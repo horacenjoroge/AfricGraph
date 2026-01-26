@@ -149,10 +149,6 @@ export default function WorkflowsPage() {
                     <li>Status changes to <span className="text-blue-400">RUNNING</span> while processing</li>
                     <li>Status becomes <span className="text-green-400">SUCCESS</span> or <span className="text-red-400">FAILED</span> when complete</li>
                   </ol>
-                  <p className="text-sm text-yellow-400 mt-3">
-                    <strong>Note:</strong> If jobs stay in PENDING status, make sure Celery workers are running. 
-                    Check the backend logs or run: <code className="bg-deep-space-50 px-1 rounded">celery -A src.ingestion.pipeline.tasks worker</code>
-                  </p>
                 </div>
               </div>
             </div>

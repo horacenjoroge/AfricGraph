@@ -44,45 +44,45 @@
     color: var(--text-primary);
   }
 
-  /* Override Tailwind text colors to use CSS variables */
+  /* Override Tailwind text colors to use CSS variables with !important to ensure they override */
   .text-white {
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
   }
 
   .light-mode .text-white {
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
   }
 
   .text-gray-300 {
-    color: var(--text-secondary);
+    color: var(--text-secondary) !important;
   }
 
   .light-mode .text-gray-300 {
-    color: var(--text-secondary);
+    color: var(--text-secondary) !important;
   }
 
   .text-gray-400 {
-    color: var(--text-secondary);
+    color: var(--text-secondary) !important;
   }
 
   .light-mode .text-gray-400 {
-    color: var(--text-secondary);
+    color: var(--text-secondary) !important;
   }
 
   .text-gray-500 {
-    color: var(--text-tertiary);
+    color: var(--text-tertiary) !important;
   }
 
   .light-mode .text-gray-500 {
-    color: var(--text-tertiary);
+    color: var(--text-tertiary) !important;
   }
 
   .text-gray-600 {
-    color: var(--text-tertiary);
+    color: var(--text-tertiary) !important;
   }
 
   .light-mode .text-gray-600 {
-    color: var(--text-secondary);
+    color: var(--text-secondary) !important;
   }
 
   body::before {
@@ -126,35 +126,40 @@
   /* Additional common text color overrides */
   .text-slate-400,
   .text-slate-500 {
-    color: var(--text-secondary);
+    color: var(--text-secondary) !important;
   }
 
   .light-mode .text-slate-400,
   .light-mode .text-slate-500 {
-    color: var(--text-secondary);
+    color: var(--text-secondary) !important;
   }
 
   /* Ensure headings are visible */
   h1, h2, h3, h4, h5, h6 {
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
   }
 
   /* Ensure links are visible */
   a {
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
   }
 
   .light-mode a {
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
   }
 
   /* Ensure buttons have visible text */
   button {
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
   }
 
   .light-mode button {
-    color: var(--text-primary);
+    color: var(--text-primary) !important;
+  }
+
+  /* Ensure all text elements inherit theme colors */
+  p, span, div, label, input, textarea, select {
+    color: inherit;
   }
 }
 

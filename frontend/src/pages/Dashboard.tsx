@@ -23,8 +23,6 @@ export default function DashboardPage() {
   const [kpis, setKpis] = useState<KPI[]>([])
   const [recentAlerts, setRecentAlerts] = useState<Alert[]>([])
   const [loading, setLoading] = useState(true)
-  const [debugInfo, setDebugInfo] = useState<any>(null)
-  const [showDebug, setShowDebug] = useState(false)
 
   useEffect(() => {
     fetchDashboardData()
@@ -173,8 +171,8 @@ export default function DashboardPage() {
         })
       }
       
-      // Store debug info
-      setDebugInfo({
+      // Log debug info to console
+      console.log('Dashboard data fetched:', {
         tenantId,
         businessesResponse: businessesRes.status === 'fulfilled' ? {
           status: 'success',
@@ -325,9 +323,6 @@ export default function DashboardPage() {
                 <br />
                 Create businesses, transactions, or other entities to see them here.
                 <br />
-                <span className="text-xs text-gray-500 mt-2 block">
-                  Check the debug panel above for API response details.
-                </span>
               </div>
             </div>
           </div>
@@ -343,12 +338,6 @@ export default function DashboardPage() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setShowDebug(!showDebug)}
-            className="px-3 py-2 glass-panel border border-gray-500/20 hover:border-gray-500/40 transition-all text-xs font-mono uppercase tracking-wider"
-          >
-            {showDebug ? 'HIDE DEBUG' : 'SHOW DEBUG'}
-          </button>
-          <button
             onClick={fetchDashboardData}
             disabled={loading}
             className="px-4 py-2 glass-panel border border-glow-cyan/20 hover:border-glow-cyan/40 transition-all text-sm font-mono uppercase tracking-wider disabled:opacity-50"
@@ -357,15 +346,6 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
-      
-      {showDebug && debugInfo && (
-        <div className="glass-panel border border-yellow-500/30 bg-yellow-500/5 p-4 rounded-lg mb-4">
-          <h3 className="text-yellow-400 font-mono font-semibold mb-2">Debug Info</h3>
-          <pre className="text-xs font-mono text-gray-300 overflow-auto max-h-64">
-            {JSON.stringify(debugInfo, null, 2)}
-          </pre>
-        </div>
-      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

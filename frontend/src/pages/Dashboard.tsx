@@ -174,27 +174,10 @@ export default function DashboardPage() {
       // Log debug info to console
       console.log('Dashboard data fetched:', {
         tenantId,
-        businessesResponse: businessesRes.status === 'fulfilled' ? {
-          status: 'success',
-          total: businessesRes.value.data.total,
-          count: businessesRes.value.data.businesses?.length || 0,
-          data: businessesRes.value.data
-        } : { status: 'failed', error: businessesRes.reason?.message },
-        alertsResponse: alertsRes.status === 'fulfilled' ? {
-          status: 'success',
-          count: alertsData.length,
-          data: alertsRes.value.data
-        } : { status: 'failed', error: alertsRes.reason?.message },
-        fraudAlertsResponse: fraudAlertsRes.status === 'fulfilled' ? {
-          status: 'success',
-          count: fraudAlertsData.length,
-          data: fraudAlertsRes.value.data
-        } : { status: 'failed', error: fraudAlertsRes.reason?.message },
-        transactionsResponse: transactionsRes.status === 'fulfilled' ? {
-          status: 'success',
-          total: transactionsRes.value.data.total,
-          data: transactionsRes.value.data
-        } : { status: 'failed', error: transactionsRes.reason?.message },
+        businesses: businessesRes.status === 'fulfilled' ? businessesRes.value.data.total : 0,
+        alerts: alertsData.length,
+        fraudAlerts: fraudAlertsData.length,
+        transactions: transactionsRes.status === 'fulfilled' ? transactionsRes.value.data.total : 0,
       })
 
       // Count high-risk businesses (businesses with risk score > 70)

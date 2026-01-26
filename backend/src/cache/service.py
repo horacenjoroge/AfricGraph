@@ -69,21 +69,27 @@ def cache_aside(
                 key_parts.extend([f"{k}:{v}" for k, v in sorted(kwargs.items())])
                 cache_key = make_cache_key(key_type, *key_parts)
 
-            # Try to get from cache
-            cached = redis_client.get(cache_key)
-            if cached is not None:
-                logger.debug("Cache hit", key=cache_key)
-                return deserialize_value(cached)
+            # Try to get from cache (handle Redis failures gracefully)
+            try:
+                cached = redis_client.get(cache_key)
+                if cached is not None:
+                    logger.debug("Cache hit", key=cache_key)
+                    return deserialize_value(cached)
+            except Exception as e:
+                logger.warning("Cache get failed, proceeding without cache", key=cache_key, error=str(e))
 
             # Cache miss - compute value
             logger.debug("Cache miss", key=cache_key)
             value = func(*args, **kwargs)
 
-            # Store in cache
+            # Store in cache (handle Redis failures gracefully)
             if value is not None:
-                cache_ttl = ttl or get_ttl(key_type)
-                serialized = serialize_value(value)
-                redis_client.set(cache_key, serialized, ttl=cache_ttl)
+                try:
+                    cache_ttl = ttl or get_ttl(key_type)
+                    serialized = serialize_value(value)
+                    redis_client.set(cache_key, serialized, ttl=cache_ttl)
+                except Exception as e:
+                    logger.warning("Cache set failed, continuing without cache", key=cache_key, error=str(e))
 
             return value
 

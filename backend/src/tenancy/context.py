@@ -47,8 +47,6 @@ async def get_tenant_from_request(request: Request) -> Optional[Tenant]:
     
     # Also check all headers for debugging
     all_header_keys = list(request.headers.keys())
-    print(f"[TENANT_CONTEXT] get_tenant_from_request: path={request.url.path}, tenant_id={tenant_id}")
-    print(f"[TENANT_CONTEXT] Available headers: {all_header_keys}")
     logger.info(
         "Checking for tenant header",
         path=request.url.path,

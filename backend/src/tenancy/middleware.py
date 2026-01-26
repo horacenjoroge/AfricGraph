@@ -36,9 +36,6 @@ class TenantMiddleware(BaseHTTPMiddleware):
         
         # Log ALL headers to see what's actually being sent
         all_headers_dict = dict(request.headers)
-        print(f"[TENANT_MIDDLEWARE] Path: {request.url.path}, X-Tenant-ID: {x_tenant_header}")
-        print(f"[TENANT_MIDDLEWARE] All headers: {list(all_headers_dict.keys())}")
-        
         logger.info(
             "Tenant middleware - checking request",
             path=request.url.path,
@@ -48,8 +45,6 @@ class TenantMiddleware(BaseHTTPMiddleware):
         )
         
         tenant = await get_tenant_from_request(request)
-        
-        print(f"[TENANT_MIDDLEWARE] After extraction: has_tenant={tenant is not None}, tenant_id={tenant.tenant_id if tenant else None}")
         
         logger.info(
             "Tenant middleware - after extraction",

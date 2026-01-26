@@ -75,10 +75,28 @@ def _normalize_path(path: str) -> str:
 @router.post("/mobile-money")
 def trigger_mobile_money(body: MobileMoneyTrigger) -> dict:
     """Enqueue mobile money ingestion. Returns job_id to poll status."""
+    from src.tenancy.context import get_current_tenant
+    
+    # Get tenant from current context (set by middleware)
+    tenant = get_current_tenant()
+    tenant_id = tenant.tenant_id if tenant else None
+    
+    if not tenant_id:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail="Tenant context required for ingestion. Please set X-Tenant-ID header or select a tenant."
+        )
+    
     # Normalize path to be relative for Docker
     normalized_path = _normalize_path(body.path)
-    jid = create_job("mobile_money", {"path": normalized_path, "provider": body.provider, "currency": body.currency})
-    ingest_mobile_money.delay(normalized_path, body.provider, body.currency, job_id=jid)
+    jid = create_job("mobile_money", {
+        "path": normalized_path,
+        "provider": body.provider,
+        "currency": body.currency,
+        "tenant_id": tenant_id
+    })
+    ingest_mobile_money.delay(normalized_path, body.provider, body.currency, job_id=jid, tenant_id=tenant_id)
     return {"job_id": jid, "status": "pending"}
 
 

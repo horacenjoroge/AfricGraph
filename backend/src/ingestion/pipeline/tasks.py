@@ -80,22 +80,42 @@ def ingest_mobile_money(
     provider: str,
     currency: str = "KES",
     job_id: Optional[str] = None,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Pipeline: Parser (mobile_money.run) -> Normalizer -> Validator -> Graph Writer.
     job_id: optional; if provided, status is updated on this job. If not, a new job is created.
+    tenant_id: required; tenant context for multi-tenancy isolation.
     """
     from .graph_writer import write_mobile_money
     from .job_store import STATUS_FAILED, STATUS_RUNNING, STATUS_SUCCESS, create_job, update_job_status
     from .validator import validate_canonical_transaction
+    from src.tenancy.context import set_current_tenant
+    from src.tenancy.manager import TenantManager
 
     from src.ingestion.mobile_money.pipeline import run as mm_run
     from src.ingestion.normalizers import MobileMoneyNormalizer
 
     _ensure_connections()
+    
+    # Set tenant context for the ingestion task
+    if tenant_id:
+        tenant_manager = TenantManager()
+        tenant = tenant_manager.get_tenant(tenant_id)
+        if tenant:
+            set_current_tenant(tenant)
+        else:
+            from src.infrastructure.logging import get_logger
+            logger = get_logger(__name__)
+            logger.warning(f"Tenant not found: {tenant_id}, proceeding without tenant context")
+    else:
+        from src.infrastructure.logging import get_logger
+        logger = get_logger(__name__)
+        logger.warning("No tenant_id provided to ingestion task, data may not be assigned to a tenant")
+    
     jid = job_id
     if not jid:
-        jid = create_job("mobile_money", {"path": path, "provider": provider, "currency": currency})
+        jid = create_job("mobile_money", {"path": path, "provider": provider, "currency": currency, "tenant_id": tenant_id})
 
     try:
         update_job_status(jid, STATUS_RUNNING)

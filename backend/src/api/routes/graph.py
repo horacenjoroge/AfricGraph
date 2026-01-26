@@ -36,8 +36,29 @@ def get_subgraph(
 ) -> dict:
     """Extract N-hop neighborhood subgraph."""
     from src.graph.models import Subgraph, GraphNode, GraphRelationship
+    from src.tenancy.context import get_current_tenant
+    from src.infrastructure.logging import get_logger
     
-    subgraph_result = extract_subgraph(node_id, max_hops, rel_types, node_labels)
+    logger = get_logger(__name__)
+    tenant = get_current_tenant()
+    
+    logger.info(
+        "Subgraph endpoint called",
+        node_id=node_id,
+        max_hops=max_hops,
+        has_tenant=tenant is not None,
+        tenant_id=tenant.tenant_id if tenant else None,
+    )
+    
+    try:
+        subgraph_result = extract_subgraph(node_id, max_hops, rel_types, node_labels)
+    except Exception as e:
+        logger.error("Error extracting subgraph", error=str(e), node_id=node_id, exc_info=True)
+        # Return empty subgraph on error
+        subgraph = Subgraph(nodes=[], relationships=[], center_node_id=node_id)
+        if format == "visualization":
+            return export_subgraph_for_visualization(subgraph)
+        return subgraph.model_dump(mode="json")
     
     # Handle case where cache returns a dict instead of Subgraph object
     # (cache serializes/deserializes Pydantic models as dicts)

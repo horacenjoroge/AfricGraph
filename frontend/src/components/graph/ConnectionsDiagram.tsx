@@ -270,7 +270,6 @@ function DiagramView({
 }
 
 function ListView({
-  connections,
   connectionsByType,
   expandedConnections,
   onToggleConnection,

@@ -29,7 +29,7 @@ export async function exportConnectionsAsPDF(
 ): Promise<void> {
   try {
     // Generate HTML and use browser print to PDF
-    await generatePDFFromHTML(node, connections, filename)
+    await generatePDFFromHTML(node, connections)
   } catch (error) {
     console.error('Failed to export PDF:', error)
     // Fallback: download as HTML
@@ -71,8 +71,7 @@ export async function exportConnectionsAsDOCX(
  */
 async function generatePDFFromHTML(
   node: Node,
-  connections: Connection[],
-  filename: string
+  connections: Connection[]
 ): Promise<void> {
   const htmlContent = generateDocumentHTML(node, connections)
   const printWindow = window.open('', '_blank')

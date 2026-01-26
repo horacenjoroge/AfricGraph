@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useNotifications } from '../../contexts/NotificationContext'
@@ -50,7 +49,8 @@ export default function UserProfile() {
     try {
       setLoading(true)
       // Get token from localStorage (check both possible keys)
-      const token = localStorage.getItem('auth_token') || localStorage.getItem('access_token') || axios.defaults.headers.common['Authorization']?.replace('Bearer ', '')
+      const authHeader = axios.defaults.headers.common['Authorization']
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('access_token') || (typeof authHeader === 'string' ? authHeader.replace('Bearer ', '') : '')
       if (!token) {
         // Not logged in - don't show error, just set user to null
         setUser(null)
@@ -92,7 +92,8 @@ export default function UserProfile() {
 
     try {
       setChangingPassword(true)
-      const token = localStorage.getItem('auth_token') || localStorage.getItem('access_token') || axios.defaults.headers.common['Authorization']?.replace('Bearer ', '')
+      const authHeader = axios.defaults.headers.common['Authorization']
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('access_token') || (typeof authHeader === 'string' ? authHeader.replace('Bearer ', '') : '')
       
       await axios.post(
         '/auth/change-password',

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
-import { io, Socket } from 'socket.io-client'
+import { io } from 'socket.io-client'
 import { useNotifications } from '../contexts/NotificationContext'
 
 interface FraudAlert {
@@ -16,7 +16,6 @@ interface FraudAlert {
 
 export default function FraudAlertsPage() {
   const [alerts, setAlerts] = useState<FraudAlert[]>([])
-  const [socket, setSocket] = useState<Socket | null>(null)
   const [loading, setLoading] = useState(false)
   const { showError } = useNotifications()
 
@@ -32,8 +31,6 @@ export default function FraudAlertsPage() {
     newSocket.on('fraud_alert', (alert: FraudAlert) => {
       setAlerts((prev) => [alert, ...prev])
     })
-    
-    setSocket(newSocket)
     
     return () => {
       newSocket.close()

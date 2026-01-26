@@ -65,7 +65,7 @@ export default function LoginPage() {
     try {
       if (isRegister) {
         // Register
-        const response = await axios.post('/auth/register', {
+        await axios.post('/auth/register', {
           email: sanitizedEmail.toLowerCase(),
           password: sanitizedPassword,
         })

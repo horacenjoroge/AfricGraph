@@ -33,8 +33,20 @@ interface Link {
   type: string
 }
 
+interface NodeWithCoords extends Node {
+  x?: number
+  y?: number
+  z?: number
+  vx?: number
+  vy?: number
+  vz?: number
+  fx?: number
+  fy?: number
+  fz?: number
+}
+
 export default function GraphExplorerPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const [allNodes, setAllNodes] = useState<Node[]>([])
   const [allLinks, setAllLinks] = useState<Link[]>([])
   const [displayNodes, setDisplayNodes] = useState<Node[]>([])
@@ -170,14 +182,14 @@ export default function GraphExplorerPage() {
       }
       
       // Set center node ID - use the requested nodeId if it exists in nodes, otherwise use first node
-      let centerId = nodeId
+      let centerId: string | null = nodeId
       if (centerId && !nodes.find(n => n.id === centerId)) {
         // Requested center node not found, use first node
         centerId = nodes[0]?.id || null
       } else if (!centerId) {
         centerId = nodes[0]?.id || null
       }
-      setCenterNodeId(centerId)
+      setCenterNodeId(centerId || '')
       
       // Reset focus when loading new subgraph
       setFocusedNode(null)
@@ -378,7 +390,7 @@ export default function GraphExplorerPage() {
     }
     
     // Convert link source/target from IDs to node objects for react-force-graph-3d
-    const resolvedLinks = filtered.links.map(link => {
+    const resolvedLinks: Link[] = filtered.links.map(link => {
       const sourceId = typeof link.source === 'string' ? link.source : link.source.id
       const targetId = typeof link.target === 'string' ? link.target : link.target.id
       const sourceNode = nodeMap.get(sourceId)
@@ -392,7 +404,7 @@ export default function GraphExplorerPage() {
         ...link,
         source: sourceNode,
         target: targetNode,
-      }
+      } as Link
     }).filter((link): link is Link => link !== null)
     
     setDisplayNodes(filtered.nodes)
@@ -693,19 +705,23 @@ export default function GraphExplorerPage() {
                 }
               }}
               // Customize force simulation for radial layout
+              // @ts-ignore - d3Force is a valid prop but not in types
               d3Force={(d3: any) => {
                 // Center node attraction - gently pull center node back to origin
                 if (centerNodeId) {
                   d3.force('centerNode', (alpha: number) => {
-                    displayNodes.forEach((node: any) => {
+                    displayNodes.forEach((node: NodeWithCoords) => {
                       if (node.id === centerNodeId) {
                         // Strong attraction to origin
-                        const dist = Math.sqrt(node.x ** 2 + node.y ** 2 + node.z ** 2)
+                        const x = node.x || 0
+                        const y = node.y || 0
+                        const z = node.z || 0
+                        const dist = Math.sqrt(x ** 2 + y ** 2 + z ** 2)
                         if (dist > 1) {
                           const force = -dist * alpha * 0.5
-                          node.vx += (node.x / dist) * force
-                          node.vy += (node.y / dist) * force
-                          node.vz += (node.z / dist) * force
+                          node.vx = (node.vx || 0) + (x / dist) * force
+                          node.vy = (node.vy || 0) + (y / dist) * force
+                          node.vz = (node.vz || 0) + (z / dist) * force
                         }
                       }
                     })
@@ -715,14 +731,14 @@ export default function GraphExplorerPage() {
                 // Strong attraction force for nodes connected to center node
                 if (centerNodeId) {
                   d3.force('centerAttraction', (alpha: number) => {
-                    const centerNode = displayNodes.find((n: any) => n.id === centerNodeId)
+                    const centerNode = displayNodes.find((n: NodeWithCoords) => n.id === centerNodeId) as NodeWithCoords | undefined
                     if (!centerNode) return
                     
-                    displayNodes.forEach((node: any) => {
+                    displayNodes.forEach((node: NodeWithCoords) => {
                       if (node.id === centerNodeId) return
                       
                       // Check if this node is connected to center
-                      const isConnected = displayLinks.some((link: any) => {
+                      const isConnected = displayLinks.some((link: Link) => {
                         const sourceId = typeof link.source === 'string' ? link.source : link.source.id
                         const targetId = typeof link.target === 'string' ? link.target : link.target.id
                         return (sourceId === centerNodeId && targetId === node.id) ||
@@ -731,9 +747,15 @@ export default function GraphExplorerPage() {
                       
                       if (isConnected) {
                         // Calculate vector from center to this node
-                        const dx = node.x - centerNode.x
-                        const dy = node.y - centerNode.y
-                        const dz = node.z - centerNode.z
+                        const cx = centerNode.x || 0
+                        const cy = centerNode.y || 0
+                        const cz = centerNode.z || 0
+                        const nx = node.x || 0
+                        const ny = node.y || 0
+                        const nz = node.z || 0
+                        const dx = nx - cx
+                        const dy = ny - cy
+                        const dz = nz - cz
                         const dist = Math.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
                         
                         if (dist > 0.1) {
@@ -741,9 +763,9 @@ export default function GraphExplorerPage() {
                           const targetDist = 60
                           const force = (targetDist - dist) * alpha * 0.3
                           
-                          node.vx += (dx / dist) * force
-                          node.vy += (dy / dist) * force
-                          node.vz += (dz / dist) * force
+                          node.vx = (node.vx || 0) + (dx / dist) * force
+                          node.vy = (node.vy || 0) + (dy / dist) * force
+                          node.vz = (node.vz || 0) + (dz / dist) * force
                         }
                       }
                     })
@@ -779,10 +801,10 @@ export default function GraphExplorerPage() {
               onEngineTick={() => {
                 // Log progress during simulation
                 if (centerNodeId && displayNodes.length > 0) {
-                  const centerNode = displayNodes.find((n: any) => n.id === centerNodeId)
+                  const centerNode = displayNodes.find((n: NodeWithCoords) => n.id === centerNodeId) as NodeWithCoords | undefined
                   if (centerNode) {
                     // Count nodes connected to center
-                    const connectedNodes = displayLinks.filter((link: any) => {
+                    const connectedNodes = displayLinks.filter((link: Link) => {
                       const sourceId = typeof link.source === 'string' ? link.source : link.source.id
                       const targetId = typeof link.target === 'string' ? link.target : link.target.id
                       return sourceId === centerNodeId || targetId === centerNodeId
@@ -791,7 +813,7 @@ export default function GraphExplorerPage() {
                     // Log first few ticks to debug
                     if (Math.random() < 0.01) { // Log ~1% of ticks
                       console.log('Force simulation:', {
-                        centerNodePos: { x: centerNode.x, y: centerNode.y, z: centerNode.z },
+                        centerNodePos: { x: centerNode.x || 0, y: centerNode.y || 0, z: centerNode.z || 0 },
                         connectedNodes,
                         totalLinks: displayLinks.length,
                       })
@@ -803,9 +825,9 @@ export default function GraphExplorerPage() {
                 console.log('Graph engine stopped, nodes:', displayNodes.length, 'links:', displayLinks.length)
                 if (graphRef.current && centerNodeId) {
                   // Center camera on the center node - only on initial load
-                  const centerNode = displayNodes.find((n: any) => n.id === centerNodeId)
+                  const centerNode = displayNodes.find((n: NodeWithCoords) => n.id === centerNodeId) as NodeWithCoords | undefined
                   if (centerNode) {
-                    console.log('Center node final position:', { x: centerNode.x, y: centerNode.y, z: centerNode.z })
+                    console.log('Center node final position:', { x: centerNode.x || 0, y: centerNode.y || 0, z: centerNode.z || 0 })
                     // Only set initial camera position if not already set by user
                     if (cameraDistance === 400) {
                       graphRef.current.cameraPosition({ x: 0, y: 0, z: cameraDistance })

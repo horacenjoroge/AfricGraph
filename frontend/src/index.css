@@ -32,6 +32,10 @@
     overflow-x: hidden;
     position: relative;
     transition: background-color 0.3s ease, color 0.3s ease;
+    /* Improve text rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   .light-mode body {
@@ -94,12 +98,14 @@
     height: 100%;
     background: linear-gradient(
       transparent 0%,
-      rgba(6, 182, 212, 0.03) 50%,
+      rgba(6, 182, 212, 0.02) 50%,
       transparent 100%
     );
     pointer-events: none;
     z-index: 1;
     animation: scan-line 8s linear infinite;
+    /* Reduce opacity to prevent text blurring */
+    opacity: 0.6;
   }
 
   .light-mode body::before {
@@ -157,9 +163,31 @@
     color: var(--text-primary) !important;
   }
 
-  /* Ensure all text elements inherit theme colors */
-  p, span, div, label, input, textarea, select {
+  /* Ensure all text elements inherit theme colors and have sharp rendering */
+  p, span, div, label, input, textarea, select, li, td, th {
     color: inherit;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Ensure text is always sharp, especially in dark mode */
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Override any blur effects on text elements */
+  p, span, div, h1, h2, h3, h4, h5, h6, a, button, label, input, textarea, select, li, td, th {
+    filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* But keep backdrop-filter on glass panels themselves */
+  .glass-panel, .glass-panel-strong {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
 }
 
@@ -167,15 +195,23 @@
   .glass-panel {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    /* Ensure text inside glass panels is sharp */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   .glass-panel-strong {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    /* Ensure text inside glass panels is sharp */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   .light-mode .glass-panel,

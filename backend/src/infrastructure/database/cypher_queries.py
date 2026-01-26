@@ -135,10 +135,11 @@ def batch_create_relationships_query() -> str:
 
 
 def merge_node_query(label: str) -> str:
-    """MERGE (n:Label {id: $id}) ON CREATE SET n = $props ON MATCH SET n = $props RETURN id(n) as node_id.
-    props must include id. Label must be in NODE_LABELS."""
+    """MERGE (n:Label {id: $id, tenant_id: $tenant_id}) ON CREATE SET n = $props ON MATCH SET n = $props RETURN id(n) as node_id.
+    props must include id and tenant_id. Label must be in NODE_LABELS.
+    CRITICAL: tenant_id is included in MERGE to ensure tenant isolation - same ID in different tenants creates separate nodes."""
     _check_label(label)
-    return f"MERGE (n:{label} {{id: $id}}) ON CREATE SET n = $props ON MATCH SET n = $props RETURN id(n) as node_id"
+    return f"MERGE (n:{label} {{id: $id, tenant_id: $tenant_id}}) ON CREATE SET n = $props ON MATCH SET n = $props RETURN id(n) as node_id"
 
 
 def merge_relationship_by_business_id_query(from_label: str, to_label: str, rel_type: str) -> str:

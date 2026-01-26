@@ -395,22 +395,40 @@ class Neo4jClient:
         return self._execute_with_retry(_execute)
 
     def merge_node(self, label: str, id_val: str, props: Dict[str, Any]) -> str:
-        """Upsert node by (label, id). ON CREATE and ON MATCH both set props. Returns internal id. Idempotent."""
+        """Upsert node by (label, id, tenant_id). ON CREATE and ON MATCH both set props. Returns internal id. Idempotent.
+        
+        CRITICAL: tenant_id is included in MERGE criteria to ensure tenant isolation.
+        Same ID in different tenants will create separate nodes, not overwrite each other.
+        """
         if "id" not in props:
             props = dict(props, id=id_val)
         # Ensure tenant_id is in properties
         from src.tenancy.query_rewriter import TenantQueryRewriter
+        from src.tenancy.context import get_current_tenant
         props = TenantQueryRewriter.add_tenant_to_properties(props)
+        
+        # Get tenant_id for MERGE criteria (must be in query params, not just props)
+        tenant = get_current_tenant()
+        if not tenant:
+            logger.warning("merge_node called without tenant context - node may not be tenant-isolated", label=label, id=id_val)
+            tenant_id = props.get("tenant_id")
+        else:
+            tenant_id = tenant.tenant_id
+        
+        if not tenant_id:
+            raise RuntimeError(f"Cannot merge node without tenant_id: {label}:{id_val}")
+        
         query = cypher_queries.merge_node_query(label)
 
         def _execute():
             with self.get_session() as session:
-                result = session.run(query, {"id": id_val, "props": props})
+                # tenant_id must be in query params for MERGE criteria
+                result = session.run(query, {"id": id_val, "tenant_id": tenant_id, "props": props})
                 record = result.single()
                 return str(record["node_id"])
 
         node_id = self._execute_with_retry(_execute)
-        logger.debug("Node merged", label=label, id=id_val)
+        logger.debug("Node merged", label=label, id=id_val, tenant_id=tenant_id)
         return node_id
 
     def merge_relationship_by_business_id(
@@ -422,16 +440,35 @@ class Neo4jClient:
         rel_type: str,
         properties: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Upsert relationship (a:FromLabel {id: from_id})-[r:RelType]->(b:ToLabel {id: to_id}). Idempotent."""
+        """Upsert relationship (a:FromLabel {id: from_id, tenant_id: $tenant_id})-[r:RelType]->(b:ToLabel {id: to_id, tenant_id: $tenant_id}). Idempotent.
+        
+        CRITICAL: tenant_id is included in MATCH to ensure tenant isolation.
+        """
+        from src.tenancy.context import get_current_tenant
+        from src.tenancy.query_rewriter import TenantQueryRewriter
+        
         props = properties or {}
+        props = TenantQueryRewriter.add_tenant_to_properties(props)
+        
+        tenant = get_current_tenant()
+        if not tenant:
+            logger.warning("merge_relationship called without tenant context", from_label=from_label, to_label=to_label)
+            tenant_id = props.get("tenant_id")
+        else:
+            tenant_id = tenant.tenant_id
+        
+        if not tenant_id:
+            raise RuntimeError(f"Cannot merge relationship without tenant_id: {from_label}:{from_id} -> {to_label}:{to_id}")
+        
         query = cypher_queries.merge_relationship_by_business_id_query(from_label, to_label, rel_type)
 
         def _execute():
             with self.get_session() as session:
-                session.run(query, {"from_id": from_id, "to_id": to_id, "props": props})
+                # Include tenant_id in MATCH to ensure tenant isolation
+                session.run(query, {"from_id": from_id, "to_id": to_id, "tenant_id": tenant_id, "props": props})
 
         self._execute_with_retry(_execute)
-        logger.debug("Relationship merged", from_label=from_label, to_label=to_label, rel_type=rel_type)
+        logger.debug("Relationship merged", from_label=from_label, to_label=to_label, rel_type=rel_type, tenant_id=tenant_id)
 
     def batch_create(
         self,

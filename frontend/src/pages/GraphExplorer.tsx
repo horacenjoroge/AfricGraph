@@ -96,15 +96,44 @@ export default function GraphExplorerPage() {
   const loadSubgraph = useCallback(async (nodeId: string, maxHops: number) => {
     setLoading(true)
     try {
+      const tenantId = localStorage.getItem('current_tenant_id')
+      const headers = tenantId ? { 'X-Tenant-ID': tenantId } : {}
+      
+      console.log('Loading subgraph for node:', nodeId, 'with tenant:', tenantId)
+      
       const response = await axios.get(`/api/v1/graph/subgraph/${nodeId}`, {
         params: { max_hops: maxHops, format: 'visualization' },
+        headers: headers,
+      })
+      
+      console.log('Subgraph API response:', {
+        status: response.status,
+        nodeCount: response.data?.nodes?.length || 0,
+        edgeCount: response.data?.edges?.length || 0,
+        centerNodeId: response.data?.center_node_id,
       })
       
       const subgraph = response.data
       console.log('Subgraph response:', subgraph)
+      console.log('Subgraph keys:', Object.keys(subgraph))
+      console.log('Nodes array:', Array.isArray(subgraph.nodes), 'length:', subgraph.nodes?.length)
+      console.log('Edges array:', Array.isArray(subgraph.edges), 'length:', subgraph.edges?.length)
       
       // Visualization format returns 'edges' not 'relationships'
       const edges = subgraph.edges || subgraph.relationships || []
+      
+      if (!subgraph.nodes || subgraph.nodes.length === 0) {
+        console.error('No nodes in subgraph response!', {
+          responseData: subgraph,
+          nodeId: nodeId,
+          tenantId: tenantId,
+        })
+        // Still set empty arrays so UI can show error message
+        setAllNodes([])
+        setAllLinks([])
+        setLoading(false)
+        return
+      }
       
       const nodes: Node[] = (subgraph.nodes || []).map((n: any) => {
         // Handle null riskScore values

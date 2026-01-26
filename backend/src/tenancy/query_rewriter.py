@@ -50,12 +50,19 @@ class TenantQueryRewriter:
         # Add tenant_id filter to WHERE clause
         # This is a simplified approach - in production, you'd want more sophisticated parsing
         if "WHERE" in query.upper():
-            # Add tenant filter to existing WHERE clause
-            # Use case-insensitive replacement but preserve original case
-            where_pos = query.upper().find("WHERE")
-            if where_pos != -1:
-                # Insert tenant filter after WHERE
-                query = query[:where_pos + 5] + f" {node_alias}.tenant_id = $tenant_id AND" + query[where_pos + 5:]
+            # Check if tenant_id filter already exists in WHERE clause
+            # Look for patterns like "tenant_id = $tenant_id" or "tenant_id = 'code-vault'"
+            tenant_filter_pattern = rf"{node_alias}\.tenant_id\s*=\s*\$tenant_id"
+            if re.search(tenant_filter_pattern, query, re.IGNORECASE):
+                # Tenant filter already exists, don't add it again
+                logger.debug("Tenant filter already exists in query, skipping rewrite")
+            else:
+                # Add tenant filter to existing WHERE clause
+                # Use case-insensitive replacement but preserve original case
+                where_pos = query.upper().find("WHERE")
+                if where_pos != -1:
+                    # Insert tenant filter after WHERE
+                    query = query[:where_pos + 5] + f" {node_alias}.tenant_id = $tenant_id AND" + query[where_pos + 5:]
         else:
             # Add WHERE clause with tenant filter
             # Find the MATCH or CREATE clause

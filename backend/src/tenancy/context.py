@@ -58,15 +58,26 @@ async def get_tenant_from_request(request: Request) -> Optional[Tenant]:
     if tenant_id:
         logger.info("Found X-Tenant-ID header", tenant_id=tenant_id, path=request.url.path)
         tenant_manager = get_tenant_manager()
-        tenant = tenant_manager.get_tenant(tenant_id.strip())  # Strip whitespace
+        tenant_id_clean = tenant_id.strip()
+        logger.info("Looking up tenant", tenant_id=tenant_id_clean)
+        tenant = tenant_manager.get_tenant(tenant_id_clean)
         if tenant:
+            logger.info("Tenant found in database", tenant_id=tenant_id_clean, name=tenant.name, status=tenant.status)
             if tenant.status == "active":
-                logger.info("Tenant found and active", tenant_id=tenant_id, name=tenant.name)
+                logger.info("Tenant found and active", tenant_id=tenant_id_clean, name=tenant.name)
                 return tenant
             else:
-                logger.warning("Tenant found but not active", tenant_id=tenant_id, status=tenant.status)
+                logger.warning("Tenant found but not active", tenant_id=tenant_id_clean, status=tenant.status)
+                return None
         else:
-            logger.warning("Tenant not found in database", tenant_id=tenant_id)
+            logger.error("Tenant not found in database", tenant_id=tenant_id_clean, searched_id=tenant_id)
+            # Try to list all tenants to see what's available
+            try:
+                all_tenants = tenant_manager.list_tenants(limit=10)
+                tenant_ids = [t.tenant_id for t in all_tenants]
+                logger.error("Available tenants", tenant_ids=tenant_ids, searched_id=tenant_id_clean)
+            except Exception as e:
+                logger.error("Failed to list tenants for debugging", error=str(e))
     else:
         logger.warning("No X-Tenant-ID header found", path=request.url.path, available_headers=all_header_keys[:10])
 

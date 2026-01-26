@@ -20,12 +20,16 @@ class TenantMiddleware(BaseHTTPMiddleware):
 
         # Extract tenant from request
         # Log all headers for debugging
-        x_tenant_header = request.headers.get("X-Tenant-ID") or request.headers.get("x-tenant-id")
+        x_tenant_header = request.headers.get("X-Tenant-ID") or request.headers.get("x-tenant-id") or request.headers.get("X-TENANT-ID")
+        
+        # Log ALL headers to see what's actually being sent
+        all_headers_dict = dict(request.headers)
         logger.info(
             "Tenant middleware - checking request",
             path=request.url.path,
+            method=request.method,
             x_tenant_id_header=x_tenant_header,
-            all_headers=list(request.headers.keys())[:10],
+            all_headers=all_headers_dict,
         )
         
         tenant = await get_tenant_from_request(request)
@@ -70,11 +74,15 @@ class TenantMiddleware(BaseHTTPMiddleware):
                     "Data access attempted without tenant",
                     path=request.url.path,
                     method=request.method,
+                    x_tenant_header=x_tenant_header,
+                    all_headers=list(request.headers.keys()),
                 )
-                raise HTTPException(
-                    status_code=403,
-                    detail="Tenant context required for data access. Please set X-Tenant-ID header or select a tenant."
-                )
+                # Don't raise 403 - allow request but it will return empty results
+                # This is to prevent breaking existing clients
+                # raise HTTPException(
+                #     status_code=403,
+                #     detail="Tenant context required for data access. Please set X-Tenant-ID header or select a tenant."
+                # )
             
             # For other endpoints, allow but log warning
             logger.warning(

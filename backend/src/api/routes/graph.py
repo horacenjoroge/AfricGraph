@@ -318,6 +318,16 @@ def list_transactions(
 ) -> dict:
     """List all transactions with pagination and optional filters."""
     from src.infrastructure.database.neo4j_client import neo4j_client
+    from src.tenancy.context import get_current_tenant
+    from src.infrastructure.logging import get_logger
+    
+    logger = get_logger(__name__)
+    tenant = get_current_tenant()
+    logger.info(
+        "Transactions endpoint called",
+        has_tenant=tenant is not None,
+        tenant_id=tenant.tenant_id if tenant else None,
+    )
     
     conditions = []
     params = {"limit": limit, "offset": offset}
@@ -331,12 +341,12 @@ def list_transactions(
     
     where_clause = " AND ".join(conditions) if conditions else "1=1"
     
-    # Get total count
+    # Get total count - use node_alias='t' to match the Transaction alias
     count_query = f"MATCH (t:Transaction) WHERE {where_clause} RETURN count(t) as total"
-    count_rows = neo4j_client.execute_cypher(count_query, params)
+    count_rows = neo4j_client.execute_cypher(count_query, params, node_alias="t")
     total = count_rows[0]["total"] if count_rows else 0
     
-    # Get transactions
+    # Get transactions - use node_alias='t' to match the Transaction alias
     query = f"""
     MATCH (t:Transaction)
     WHERE {where_clause}
@@ -345,7 +355,7 @@ def list_transactions(
     ORDER BY t.date DESC, t.id ASC
     SKIP $offset LIMIT $limit
     """
-    rows = neo4j_client.execute_cypher(query, params)
+    rows = neo4j_client.execute_cypher(query, params, node_alias="t")
     
     transactions = []
     for row in rows:
@@ -388,12 +398,12 @@ def list_people(
     
     where_clause = " AND ".join(conditions) if conditions else "1=1"
     
-    # Get total count
+    # Get total count - use node_alias='p' to match the Person alias
     count_query = f"MATCH (p:Person) WHERE {where_clause} RETURN count(p) as total"
-    count_rows = neo4j_client.execute_cypher(count_query, params)
+    count_rows = neo4j_client.execute_cypher(count_query, params, node_alias="p")
     total = count_rows[0]["total"] if count_rows else 0
     
-    # Get people with transaction counts
+    # Get people with transaction counts - use node_alias='p' to match the Person alias
     query = f"""
     MATCH (p:Person)
     WHERE {where_clause}
@@ -402,7 +412,7 @@ def list_people(
     ORDER BY transaction_count DESC, p.name ASC
     SKIP $offset LIMIT $limit
     """
-    rows = neo4j_client.execute_cypher(query, params)
+    rows = neo4j_client.execute_cypher(query, params, node_alias="p")
     
     people = []
     for row in rows:

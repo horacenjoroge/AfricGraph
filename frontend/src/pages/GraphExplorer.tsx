@@ -56,7 +56,7 @@ export default function GraphExplorerPage() {
   const [loading, setLoading] = useState(false)
   const [showConnectionsDiagram, setShowConnectionsDiagram] = useState(false)
   const [nodeConnections, setNodeConnections] = useState<any[]>([])
-  const [centerNodeId, setCenterNodeId] = useState<string | null>(null)
+  const [centerNodeId, setCenterNodeId] = useState<string>('')
   const [nodeHopDistances, setNodeHopDistances] = useState<Map<string, number>>(new Map())
   const [nodeSizes, setNodeSizes] = useState<Map<string, number>>(new Map())
   const [availableRelationshipTypes, setAvailableRelationshipTypes] = useState<string[]>([])
@@ -182,14 +182,14 @@ export default function GraphExplorerPage() {
       }
       
       // Set center node ID - use the requested nodeId if it exists in nodes, otherwise use first node
-      let centerId: string | null = nodeId
+      let centerId: string = nodeId
       if (centerId && !nodes.find(n => n.id === centerId)) {
         // Requested center node not found, use first node
-        centerId = nodes[0]?.id || null
+        centerId = nodes[0]?.id || ''
       } else if (!centerId) {
-        centerId = nodes[0]?.id || null
+        centerId = nodes[0]?.id || ''
       }
-      setCenterNodeId(centerId || '')
+      setCenterNodeId(centerId)
       
       // Reset focus when loading new subgraph
       setFocusedNode(null)
@@ -390,22 +390,24 @@ export default function GraphExplorerPage() {
     }
     
     // Convert link source/target from IDs to node objects for react-force-graph-3d
-    const resolvedLinks: Link[] = filtered.links.map(link => {
-      const sourceId = typeof link.source === 'string' ? link.source : link.source.id
-      const targetId = typeof link.target === 'string' ? link.target : link.target.id
-      const sourceNode = nodeMap.get(sourceId)
-      const targetNode = nodeMap.get(targetId)
-      
-      if (!sourceNode || !targetNode) {
-        return null
-      }
-      
-      return {
-        ...link,
-        source: sourceNode,
-        target: targetNode,
-      } as Link
-    }).filter((link): link is Link => link !== null)
+    const resolvedLinks: Link[] = filtered.links
+      .map(link => {
+        const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+        const targetId = typeof link.target === 'string' ? link.target : link.target.id
+        const sourceNode = nodeMap.get(sourceId)
+        const targetNode = nodeMap.get(targetId)
+        
+        if (!sourceNode || !targetNode) {
+          return null
+        }
+        
+        return {
+          ...link,
+          source: sourceNode,
+          target: targetNode,
+        } as Link
+      })
+      .filter((link): link is Link => link !== null && link !== undefined)
     
     setDisplayNodes(filtered.nodes)
     setDisplayLinks(resolvedLinks)
@@ -687,10 +689,13 @@ export default function GraphExplorerPage() {
               backgroundColor="#030712"
               showNavInfo={true}
               // Prevent center node from being dragged too far
-              onNodeDrag={(node: any) => {
+              onNodeDrag={(node: NodeWithCoords) => {
                 // Allow center node to move slightly but pull it back
                 if (centerNodeId && node.id === centerNodeId) {
-                  const dist = Math.sqrt(node.x ** 2 + node.y ** 2 + node.z ** 2)
+                  const x = node.x || 0
+                  const y = node.y || 0
+                  const z = node.z || 0
+                  const dist = Math.sqrt(x ** 2 + y ** 2 + z ** 2)
                   if (dist > 50) {
                     // If dragged too far, reset to origin
                     node.fx = 0

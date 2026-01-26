@@ -90,9 +90,19 @@ def write_mobile_money(
         nodes += 1
 
         person_id = _person_id_from_txn(t.counterparty, t.counterparty_phone, t.resolved_counterparty_entity_id)
+        
+        # Determine person name: prefer counterparty name, fallback to formatted phone or "Unknown"
+        person_name = t.counterparty
+        if not person_name or (person_name and any(c.isdigit() for c in person_name) and len([c for c in person_name if c.isdigit()]) >= 9):
+            # Name is missing or is a phone number - use formatted phone or "Unknown"
+            if t.counterparty_phone:
+                person_name = f"Phone: {t.counterparty_phone}"
+            else:
+                person_name = "Unknown"
+        
         person_props = _to_node_props({
             "id": person_id,
-            "name": (t.counterparty or "Unknown").strip()[:255],
+            "name": person_name.strip()[:255],
             "phone": t.counterparty_phone,  # Add phone
             "created_at": _now().isoformat(),
         })

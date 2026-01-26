@@ -18,12 +18,23 @@ class MobileMoneyNormalizer(BaseNormalizer):
         # Enhanced counterparty extraction
         counterparty_name, counterparty_phone_raw, direction = extract_counterparty_with_phone(t.description)
         
-        # Use extracted values or fall back to existing counterparty
-        final_name = counterparty_name or t.counterparty
+        # Determine final name and phone
+        # If counterparty_name is None, check if t.counterparty is a phone number
+        # If it's a phone number, don't use it as the name - use "Unknown" instead
+        final_name = counterparty_name
+        if not final_name and t.counterparty:
+            # Check if counterparty is a phone number (mostly digits)
+            is_phone = any(c.isdigit() for c in t.counterparty) and len([c for c in t.counterparty if c.isdigit()]) >= 9
+            if not is_phone:
+                # It's not a phone number, use it as name
+                final_name = t.counterparty
+            # If it is a phone number, final_name stays None (will be set to "Unknown" in graph_writer)
+        
         final_phone = None
         if counterparty_phone_raw:
             final_phone = normalize_phone(counterparty_phone_raw)
-        elif t.counterparty and any(c.isdigit() for c in t.counterparty):
+        elif t.counterparty and any(c.isdigit() for c in t.counterparty) and len([c for c in t.counterparty if c.isdigit()]) >= 9:
+            # t.counterparty is a phone number, use it as phone
             final_phone = normalize_phone(t.counterparty)
 
         return CanonicalTransaction(

@@ -136,6 +136,10 @@ def ingest_mobile_money(
     except Exception as e:
         update_job_status(jid, STATUS_FAILED, error_message=str(e)[:2000])
         raise
+    finally:
+        # Clear tenant context after ingestion
+        from src.tenancy.context import set_current_tenant
+        set_current_tenant(None)
 
 
 @app.task(bind=True, autoretry_for=(Exception,), retries=3, on_failure=_on_failure_set_dlq)

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import axios from 'axios'
+import api from '../utils/api'
 import { useNotifications } from '../contexts/NotificationContext'
 
 interface Transaction {
@@ -51,7 +52,7 @@ export default function TransactionsPage() {
       if (searchQuery) params.append('search', searchQuery)
       if (transactionTypeFilter) params.append('transaction_type', transactionTypeFilter)
 
-      const response = await axios.get(`/api/v1/graph/transactions?${params}`)
+      const response = await api.get(`/graph/transactions?${params}`)
       setTransactions(response.data.transactions || [])
       setPagination(prev => ({
         ...prev,
@@ -77,7 +78,7 @@ export default function TransactionsPage() {
       params.append('offset', pagination.people.offset.toString())
       if (searchQuery) params.append('search', searchQuery)
 
-      const response = await axios.get(`/api/v1/graph/people?${params}`)
+      const response = await api.get(`/graph/people?${params}`)
       setPeople(response.data.people || [])
       setPagination(prev => ({
         ...prev,

@@ -143,13 +143,14 @@ def merge_node_query(label: str) -> str:
 
 
 def merge_relationship_by_business_id_query(from_label: str, to_label: str, rel_type: str) -> str:
-    """MATCH (a:FromLabel {id: $from_id}), (b:ToLabel {id: $to_id}) MERGE (a)-[r:RelType]->(b) SET r += $props.
-    Uses business id (string), not internal neo4j id."""
+    """MATCH (a:FromLabel {id: $from_id, tenant_id: $tenant_id}), (b:ToLabel {id: $to_id, tenant_id: $tenant_id}) MERGE (a)-[r:RelType]->(b) SET r += $props.
+    Uses business id (string), not internal neo4j id.
+    CRITICAL: tenant_id is included in MATCH to ensure tenant isolation."""
     _check_label(from_label)
     _check_label(to_label)
     _check_rel_type(rel_type)
     return (
-        f"MATCH (a:{from_label} {{id: $from_id}}), (b:{to_label} {{id: $to_id}}) "
+        f"MATCH (a:{from_label} {{id: $from_id, tenant_id: $tenant_id}}), (b:{to_label} {{id: $to_id, tenant_id: $tenant_id}}) "
         f"MERGE (a)-[r:{rel_type}]->(b) SET r += $props"
     )
 

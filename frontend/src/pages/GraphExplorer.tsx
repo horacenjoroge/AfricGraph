@@ -33,6 +33,12 @@ interface Link {
   type: string
 }
 
+interface ResolvedLink {
+  source: Node
+  target: Node
+  type: string
+}
+
 interface NodeWithCoords extends Node {
   x?: number
   y?: number
@@ -49,8 +55,8 @@ export default function GraphExplorerPage() {
   const [searchParams] = useSearchParams()
   const [allNodes, setAllNodes] = useState<Node[]>([])
   const [allLinks, setAllLinks] = useState<Link[]>([])
-  const [displayNodes, setDisplayNodes] = useState<Node[]>([])
-  const [displayLinks, setDisplayLinks] = useState<Link[]>([])
+  const [displayNodes, setDisplayNodes] = useState<NodeWithCoords[]>([])
+  const [displayLinks, setDisplayLinks] = useState<ResolvedLink[]>([])
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [focusedNode, setFocusedNode] = useState<Node | null>(null)
   const [loading, setLoading] = useState(false)
@@ -170,11 +176,15 @@ export default function GraphExplorerPage() {
       console.log('Node count:', nodes.length, 'Link count:', links.length)
       
       // Debug: Check links connected to the requested center node
-      const centerLinks = links.filter(link => {
-        return link.source === nodeId || link.target === nodeId
-      })
-      console.log(`Links connected to ${nodeId}:`, centerLinks.length)
-      console.log('Sample center links:', centerLinks.slice(0, 5))
+      if (nodeId) {
+        const centerLinks = links.filter(link => {
+          const sourceId = typeof link.source === 'string' ? link.source : link.source.id
+          const targetId = typeof link.target === 'string' ? link.target : link.target.id
+          return sourceId === nodeId || targetId === nodeId
+        })
+        console.log(`Links connected to ${nodeId}:`, centerLinks.length)
+        console.log('Sample center links:', centerLinks.slice(0, 5))
+      }
       
       if (nodes.length === 0) {
         console.warn('No nodes found in subgraph response')
@@ -390,7 +400,7 @@ export default function GraphExplorerPage() {
     }
     
     // Convert link source/target from IDs to node objects for react-force-graph-3d
-    const resolvedLinks: Link[] = filtered.links
+    const resolvedLinks: ResolvedLink[] = filtered.links
       .map(link => {
         const sourceId = typeof link.source === 'string' ? link.source : link.source.id
         const targetId = typeof link.target === 'string' ? link.target : link.target.id
@@ -402,14 +412,14 @@ export default function GraphExplorerPage() {
         }
         
         return {
-          ...link,
+          type: link.type,
           source: sourceNode,
           target: targetNode,
-        } as Link
+        } as ResolvedLink
       })
-      .filter((link): link is Link => link !== null && link !== undefined)
+      .filter((link): link is ResolvedLink => link !== null && link !== undefined)
     
-    setDisplayNodes(filtered.nodes)
+    setDisplayNodes(filtered.nodes as NodeWithCoords[])
     setDisplayLinks(resolvedLinks)
   }, [allNodes, allLinks, filters, centerNodeId, nodeHopDistances, focusedNode])
 
@@ -743,9 +753,9 @@ export default function GraphExplorerPage() {
                       if (node.id === centerNodeId) return
                       
                       // Check if this node is connected to center
-                      const isConnected = displayLinks.some((link: Link) => {
-                        const sourceId = typeof link.source === 'string' ? link.source : link.source.id
-                        const targetId = typeof link.target === 'string' ? link.target : link.target.id
+                      const isConnected = displayLinks.some((link: ResolvedLink) => {
+                        const sourceId = link.source.id
+                        const targetId = link.target.id
                         return (sourceId === centerNodeId && targetId === node.id) ||
                                (targetId === centerNodeId && sourceId === node.id)
                       })
@@ -809,9 +819,9 @@ export default function GraphExplorerPage() {
                   const centerNode = displayNodes.find((n: NodeWithCoords) => n.id === centerNodeId) as NodeWithCoords | undefined
                   if (centerNode) {
                     // Count nodes connected to center
-                    const connectedNodes = displayLinks.filter((link: Link) => {
-                      const sourceId = typeof link.source === 'string' ? link.source : link.source.id
-                      const targetId = typeof link.target === 'string' ? link.target : link.target.id
+                    const connectedNodes = displayLinks.filter((link: ResolvedLink) => {
+                      const sourceId = link.source.id
+                      const targetId = link.target.id
                       return sourceId === centerNodeId || targetId === centerNodeId
                     }).length
                     

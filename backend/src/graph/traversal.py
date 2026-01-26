@@ -37,10 +37,21 @@ def extract_subgraph(
     # Use a simpler pattern that limits results and avoids collecting all paths
     # Limit to 200 nodes max to prevent memory overflow
     max_nodes_limit = 200
+    # Add tenant filtering for traversal queries
+    from src.tenancy.context import get_current_tenant
+    tenant = get_current_tenant()
+    tenant_filter = ""
+    tenant_params = {}
+    if tenant:
+        tenant_filter = "WHERE start.tenant_id = $tenant_id"
+        tenant_params = {"tenant_id": tenant.tenant_id}
+    
     query = f"""
     MATCH (start {{id: $node_id}})
+    {tenant_filter}
     // Get distinct nodes within max_hops (limited to prevent memory issues)
     MATCH (start)-[{rel_filter}*1..{max_hops}]-(n)
+    WHERE n.tenant_id = $tenant_id
     {node_filter}
     WITH start, collect(DISTINCT n) as all_nodes
     // Limit nodes to prevent memory overflow
@@ -89,7 +100,10 @@ def extract_subgraph(
         relationships
     LIMIT 1
     """
-    rows = neo4j_client.execute_cypher(query, {"node_id": node_id})
+    # Combine parameters
+    params = {"node_id": node_id, **tenant_params}
+    # Skip tenant filter in execute_cypher since we've added it manually
+    rows = neo4j_client.execute_cypher(query, params, skip_tenant_filter=True)
     if not rows:
         return Subgraph(nodes=[], relationships=[], center_node_id=node_id)
 
@@ -102,8 +116,12 @@ def extract_subgraph(
     center_id = str(row.get("center_id", node_id))
     if not any(n.id == center_id for n in nodes):
         # Try to find center node by id property
-        center_query = "MATCH (n {id: $node_id}) RETURN n, labels(n) as labels LIMIT 1"
-        center_rows = neo4j_client.execute_cypher(center_query, {"node_id": center_id})
+        # Add tenant filter to center node query
+        center_query = "MATCH (n {id: $node_id}) WHERE n.tenant_id = $tenant_id RETURN n, labels(n) as labels LIMIT 1"
+        center_params = {"node_id": center_id}
+        if tenant:
+            center_params["tenant_id"] = tenant.tenant_id
+        center_rows = neo4j_client.execute_cypher(center_query, center_params, skip_tenant_filter=True)
         if center_rows:
             center_data = center_rows[0]
             center_node = center_data.get("n", {})
@@ -137,16 +155,26 @@ def find_shortest_path(
         types_str = "|".join(rel_types)
         rel_filter = f":{types_str}"
 
+    # Add tenant filtering
+    from src.tenancy.context import get_current_tenant
+    tenant = get_current_tenant()
+    tenant_params = {}
+    if tenant:
+        tenant_params = {"tenant_id": tenant.tenant_id}
+    
     query = f"""
     MATCH (a {{id: $start_id}}), (b {{id: $end_id}})
+    WHERE a.tenant_id = $tenant_id AND b.tenant_id = $tenant_id
     // Use bidirectional matching to find paths in either direction
     MATCH path = shortestPath((a)-[{rel_filter}*1..{max_depth}]-(b))
+    WHERE ALL(n IN nodes(path) WHERE n.tenant_id = $tenant_id)
     RETURN 
         [n in nodes(path) | {{id: coalesce(n.id, toString(id(n))), labels: labels(n), props: properties(n)}}] as nodes,
         [r in relationships(path) | {{type: type(r), from: coalesce(startNode(r).id, toString(id(startNode(r)))), to: coalesce(endNode(r).id, toString(id(endNode(r)))), props: properties(r)}}] as rels,
         length(path) as path_length
     """
-    rows = neo4j_client.execute_cypher(query, {"start_id": start_id, "end_id": end_id})
+    params = {"start_id": start_id, "end_id": end_id, **tenant_params}
+    rows = neo4j_client.execute_cypher(query, params, skip_tenant_filter=True)
     if not rows or not rows[0].get("nodes"):
         return None
 
@@ -181,10 +209,19 @@ def find_all_paths(
         types_str = "|".join(rel_types)
         rel_filter = f":{types_str}"
 
+    # Add tenant filtering
+    from src.tenancy.context import get_current_tenant
+    tenant = get_current_tenant()
+    tenant_params = {}
+    if tenant:
+        tenant_params = {"tenant_id": tenant.tenant_id}
+    
     query = f"""
     MATCH (a {{id: $start_id}}), (b {{id: $end_id}})
+    WHERE a.tenant_id = $tenant_id AND b.tenant_id = $tenant_id
     // Use bidirectional matching to find paths in either direction
     MATCH path = (a)-[{rel_filter}*1..{max_depth}]-(b)
+    WHERE ALL(n IN nodes(path) WHERE n.tenant_id = $tenant_id)
     RETURN 
         [n in nodes(path) | {{id: coalesce(n.id, toString(id(n))), labels: labels(n), props: properties(n)}}] as nodes,
         [r in relationships(path) | {{type: type(r), from: coalesce(startNode(r).id, toString(id(startNode(r)))), to: coalesce(endNode(r).id, toString(id(endNode(r)))), props: properties(r)}}] as rels,
@@ -192,9 +229,8 @@ def find_all_paths(
     ORDER BY path_length ASC
     LIMIT $limit
     """
-    rows = neo4j_client.execute_cypher(
-        query, {"start_id": start_id, "end_id": end_id, "limit": limit}
-    )
+    params = {"start_id": start_id, "end_id": end_id, "limit": limit, **tenant_params}
+    rows = neo4j_client.execute_cypher(query, params, skip_tenant_filter=True)
 
     paths = []
     for row in rows:

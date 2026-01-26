@@ -343,8 +343,10 @@ def list_transactions(
     
     # Get total count - use node_alias='t' to match the Transaction alias
     count_query = f"MATCH (t:Transaction) WHERE {where_clause} RETURN count(t) as total"
+    logger.info("Executing count query", query=count_query, params=params, tenant_id=tenant.tenant_id if tenant else None)
     count_rows = neo4j_client.execute_cypher(count_query, params, node_alias="t")
     total = count_rows[0]["total"] if count_rows else 0
+    logger.info("Count query result", total=total, tenant_id=tenant.tenant_id if tenant else None)
     
     # Get transactions - use node_alias='t' to match the Transaction alias
     query = f"""
@@ -355,7 +357,9 @@ def list_transactions(
     ORDER BY t.date DESC, t.id ASC
     SKIP $offset LIMIT $limit
     """
+    logger.info("Executing transactions query", query_preview=query[:200], params=params, tenant_id=tenant.tenant_id if tenant else None)
     rows = neo4j_client.execute_cypher(query, params, node_alias="t")
+    logger.info("Transactions query result", row_count=len(rows), tenant_id=tenant.tenant_id if tenant else None)
     
     transactions = []
     for row in rows:

@@ -171,10 +171,12 @@ class Neo4jClient:
                 )
                 query = tenant_rewritten.cypher
                 parameters = tenant_rewritten.params
-                logger.debug(
+                logger.info(
                     "Query rewritten with tenant filter",
                     tenant_id=tenant.tenant_id,
-                    rewritten_query_preview=query[:150],
+                    original_query_preview=query[:200] if len(query) > 200 else query,
+                    rewritten_query_preview=tenant_rewritten.cypher[:200] if len(tenant_rewritten.cypher) > 200 else tenant_rewritten.cypher,
+                    tenant_param=parameters.get("tenant_id"),
                 )
             else:
                 # No tenant context - return empty results for data queries

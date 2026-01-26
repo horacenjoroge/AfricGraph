@@ -122,6 +122,40 @@
   * {
     @apply border-glass-border;
   }
+
+  /* Additional common text color overrides */
+  .text-slate-400,
+  .text-slate-500 {
+    color: var(--text-secondary);
+  }
+
+  .light-mode .text-slate-400,
+  .light-mode .text-slate-500 {
+    color: var(--text-secondary);
+  }
+
+  /* Ensure headings are visible */
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--text-primary);
+  }
+
+  /* Ensure links are visible */
+  a {
+    color: var(--text-primary);
+  }
+
+  .light-mode a {
+    color: var(--text-primary);
+  }
+
+  /* Ensure buttons have visible text */
+  button {
+    color: var(--text-primary);
+  }
+
+  .light-mode button {
+    color: var(--text-primary);
+  }
 }
 
 @layer components {

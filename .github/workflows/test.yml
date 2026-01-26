@@ -129,3 +129,4 @@ jobs:
           file: ./frontend/Dockerfile.prod
           push: false
           tags: africgraph-frontend:test
+          no-cache: true

@@ -13,9 +13,17 @@ class TenantMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         """Process request with tenant context."""
+        # Log that middleware is running
+        logger.info(
+            "TenantMiddleware.dispatch called",
+            path=request.url.path,
+            method=request.method,
+        )
+        
         # Skip tenant check for certain paths
         skip_paths = ["/health", "/metrics", "/docs", "/openapi.json", "/redoc", "/"]
         if any(request.url.path.startswith(path) for path in skip_paths):
+            logger.info("Skipping tenant check for path", path=request.url.path)
             return await call_next(request)
 
         # Extract tenant from request
@@ -33,6 +41,8 @@ class TenantMiddleware(BaseHTTPMiddleware):
         )
         
         tenant = await get_tenant_from_request(request)
+        
+        print(f"[TENANT_MIDDLEWARE] After extraction: has_tenant={tenant is not None}, tenant_id={tenant.tenant_id if tenant else None}")
         
         logger.info(
             "Tenant middleware - after extraction",

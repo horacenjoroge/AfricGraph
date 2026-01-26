@@ -21,10 +21,14 @@ class TenantMiddleware(BaseHTTPMiddleware):
         )
         
         # Skip tenant check for certain paths
-        skip_paths = ["/health", "/metrics", "/docs", "/openapi.json", "/redoc", "/"]
-        if any(request.url.path.startswith(path) for path in skip_paths):
-            logger.info("Skipping tenant check for path", path=request.url.path)
+        skip_paths = ["/health", "/metrics", "/docs", "/openapi.json", "/redoc"]
+        # Only skip if path is exactly "/" (root)
+        if request.url.path == "/" or any(request.url.path.startswith(path) for path in skip_paths):
+            logger.info("Skipping tenant check for path", path=request.url.path, skip_paths=skip_paths)
             return await call_next(request)
+        
+        # Log that we're NOT skipping
+        logger.info("Processing tenant check for path", path=request.url.path)
 
         # Extract tenant from request
         # Log all headers for debugging
@@ -32,6 +36,9 @@ class TenantMiddleware(BaseHTTPMiddleware):
         
         # Log ALL headers to see what's actually being sent
         all_headers_dict = dict(request.headers)
+        print(f"[TENANT_MIDDLEWARE] Path: {request.url.path}, X-Tenant-ID: {x_tenant_header}")
+        print(f"[TENANT_MIDDLEWARE] All headers: {list(all_headers_dict.keys())}")
+        
         logger.info(
             "Tenant middleware - checking request",
             path=request.url.path,

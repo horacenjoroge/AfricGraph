@@ -42,6 +42,28 @@ ENV/
 # Project plan (not committed)
 
 
+# Local-only docs (keep out of main repo)
+docs/api-diagrams.md
+docs/api-reference.md
+docs/architecture.md
+docs/CHANGELOG.md
+docs/CONTRIBUTING.md
+docs/deployment.md
+docs/developer-guide.md
+docs/glossary.md
+docs/graphql-schema.md
+docs/index.md
+docs/mpesa_csv_guide.md
+docs/ontology.md
+docs/performance-guide.md
+docs/quick-reference.md
+docs/runbooks.md
+docs/security-guide.md
+docs/TESTING_GUIDE.md
+docs/troubleshooting.md
+docs/user-manual.md
+docs/VIEWING_DIAGRAMS.md
+
 # Logs
 *.log
 logs/

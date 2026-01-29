@@ -39,8 +39,9 @@ ENV/
 *~
 .DS_Store
 
-# Project plan (not committed)
-
+# Project plan and cursor rules (local only, not on remote)
+PROJECT_PLAN.md
+.cursorrules
 
 # Local-only docs (keep out of main repo)
 docs/api-diagrams.md

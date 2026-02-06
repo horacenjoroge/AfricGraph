@@ -1,6 +1,21 @@
 # AfricGraph
 
-Ontology-driven decision platform for SMEs. Backend (FastAPI), frontend (React), and supporting services run via Docker Compose.
+**AfricGraph** is an ontology-driven decision platform for small and medium-sized enterprises (SMEs). It helps businesses understand risk, spot fraud patterns, and analyze relationships across their data—people, companies, transactions, invoices, payments, suppliers, and customers—by modeling them in a knowledge graph and exposing them through an interactive 3D visualization and dashboards.
+
+- **Graph-first:** Entities and relationships (e.g. OWNS, BUYS_FROM, SELLS_TO, INVOLVES) are stored in **Neo4j**, so you can query and traverse connections naturally instead of flattening into tables.
+- **Multi-tenant:** Each business sees only its own data; tenant isolation is enforced at the API and database layers.
+- **Risk & fraud:** Built-in modules for risk scoring and fraud-pattern detection on top of the graph.
+- **Structured + graph:** **PostgreSQL** holds metadata, audit logs, and workflow state; **Neo4j** holds the graph. Ingestion pipelines (including M-Pesa CSV and accounting connectors) normalize data into the shared ontology.
+- **Stack:** Backend (FastAPI, Python), frontend (React, TypeScript, 3D graph viz), Redis, RabbitMQ, Celery, Elasticsearch. All services run via **Docker Compose** for local and deployment use.
+
+## Demo
+
+<!-- Replace the link below with your video URL (YouTube, Vimeo, Loom, etc.) -->
+[▶ Watch demo](https://example.com/your-demo-video)
+
+<!-- Optional: use a thumbnail image that links to the video (upload an image to the repo or use a URL):
+[![Demo thumbnail](docs/demo-thumbnail.png)](https://example.com/your-demo-video)
+-->
 
 ## Prerequisites
 
